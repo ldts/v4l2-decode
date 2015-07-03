@@ -52,6 +52,8 @@ int video_queue_buf_cap(struct instance *i, int n);
 /* Control MFC streaming */
 int video_stream(struct instance *i, enum v4l2_buf_type type, int status);
 
+int video_export_buf(struct instance *i, int index);
+
 /* Dequeue a buffer, the structure *buf is used to return the parameters of the
  * dequeued buffer. */
 int video_dequeue_output(struct instance *i, int *n);

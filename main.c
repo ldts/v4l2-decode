@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <linux/videodev2.h>
-#include <media/msm-v4l2-controls.h>
+#include "msm-v4l2-controls.h"
 #include <sys/ioctl.h>
 #include <poll.h>
 #include <pthread.h>
@@ -38,6 +38,7 @@
 #include "fileops.h"
 #include "video.h"
 #include "parser.h"
+#include "drm-funcs.h"
 
 /* This is the size of the buffer for the compressed stream.
  * It limits the maximum compressed frame size. */
@@ -125,6 +126,8 @@ int extract_and_process_header(struct instance *i)
 {
 	int used, fs;
 	int ret;
+	int n;
+	struct video *vid = &i->video;
 
 	ret = i->parser.func(&i->parser.ctx,
 			     i->in.p + i->in.offs,
@@ -143,8 +146,8 @@ int extract_and_process_header(struct instance *i)
 	if (i->parser.codec != V4L2_PIX_FMT_H263)
 		i->in.offs += used;
 	else
-	/* To do this we shall reset the stream parser to the initial
-	 * configuration */
+		/* To do this we shall reset the stream parser to the initial
+	 	 * configuration */
 		parse_stream_init(&i->parser.ctx);
 
 	dbg("Extracted header of size %d", fs);
@@ -156,7 +159,15 @@ int extract_and_process_header(struct instance *i)
 	dbg("queued output buffer %d", 0);
 
 	i->video.out_buf_flag[0] = 1;
+#if 1
+	for (n = 1; n < vid->out_buf_cnt; n++) {
+		ret = video_queue_buf_out(i, n, 1);
+		if (ret)
+			return -1;
 
+		i->video.out_buf_flag[n] = 1;
+	}
+#endif
 	ret = video_stream(i, V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
 			   VIDIOC_STREAMON);
 	if (ret)
@@ -358,6 +369,10 @@ int main(int argc, char **argv)
 
 	vid->total_captured = 0;
 
+	ret = parse_stream_init(&inst.parser.ctx);
+	if (ret)
+		goto err;
+
 	ret = input_open(&inst, inst.in.name);
 	if (ret)
 		goto err;
@@ -372,15 +387,7 @@ int main(int argc, char **argv)
 		goto err;
 #endif
 	ret = video_setup_output(&inst, inst.parser.codec,
-				 STREAM_BUUFER_SIZE, 6);
-	if (ret)
-		goto err;
-
-	ret = parse_stream_init(&inst.parser.ctx);
-	if (ret)
-		goto err;
-
-	ret = video_setup_capture(&inst, 20, inst.width, inst.height);
+				 STREAM_BUUFER_SIZE, 1);
 	if (ret)
 		goto err;
 
@@ -388,9 +395,16 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
+	ret = video_setup_capture(&inst, 2, inst.width, inst.height);
+	if (ret)
+		goto err;
+
 	ret = extract_and_process_header(&inst);
 	if (ret)
 		goto err;
+
+	for (n = 0; n < vid->cap_buf_cnt; n++)
+		video_export_buf(&inst, n);
 
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {
@@ -425,6 +439,8 @@ int main(int argc, char **argv)
 	pthread_mutex_destroy(&inst.lock);
 
 	info("Total frames captured %ld", vid->total_captured);
+
+	drm_test();
 
 	return 0;
 err:

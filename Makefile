@@ -17,26 +17,29 @@
 #
 
 # Toolchain path
-TCPATH = arm-linux-gnueabihf-
-#TCPATH =
-KERNELHEADERS = /home/svarbanov/work/linux/mainline/kobj-linaro-integration/usr/include
+#TCPATH = arm-linux-gnueabihf-
+TCPATH = aarch64-linux-gnu-
+KERNELHEADERS = /usr/include
 
 CC = ${TCPATH}gcc
 AR = "${TCPATH}ar rc"
 AR2 = ${TCPATH}ranlib make -j4
 
 
-INCLUDES = -I$(KERNELHEADERS)
+INCLUDES = -I$(KERNELHEADERS) -I/usr/include/drm
 
 #INCLUDES = -I$(KERNELHEADERS)/include
 
 #-I$(TARGETROOT)/usr/include/linux
 
-SOURCES = main.c fileops.c args.c parser.c video.c queue.c
+SOURCES = main.c drm.c fileops.c args.c parser.c video.c queue.c
 OBJECTS := $(SOURCES:.c=.o)
 EXEC = v4l2_decode
-CFLAGS = -Wall -g -lm
+CFLAGS = -Wall -g
 #-Os
+LIBS = -lpthread -ldrm_freedreno -lm
+LIBPATH = -L/usr/lib/aarch64-linux-gnu
+LDFLAGS = -o $(EXEC) $(LIBPATH) $(LIBS)
 
 all: $(EXEC)
 
@@ -44,7 +47,7 @@ all: $(EXEC)
 	$(CC) -c $(CFLAGS) $(INCLUDES) $<
 
 $(EXEC): $(OBJECTS)
-	$(CC) $(CFLAGS) -static -o $(EXEC) $(OBJECTS) -pthread
+	$(CC) -o v4l2_decode $(OBJECTS) -lpthread -ldrm -ldrm_freedreno
 
 clean:
 	rm -f *.o $(EXEC)

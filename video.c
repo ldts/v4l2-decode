@@ -21,7 +21,7 @@
  */
 
 #include <linux/videodev2.h>
-#include <media/msm-v4l2-controls.h>
+#include "msm-v4l2-controls.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -86,8 +86,36 @@ int video_set_control(struct instance *i)
 	return ret;
 }
 
+int video_export_buf(struct instance *i, int index)
+{
+	struct video *vid = &i->video;
+	struct v4l2_exportbuffer expbuf;
+	int num_planes = CAP_PLANES;
+	int n;
+
+	for (n = 0; n < num_planes; n++) {
+		memset(&expbuf, 0, sizeof(expbuf));
+
+		expbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+		expbuf.index = index;
+		expbuf.flags = O_CLOEXEC | O_RDWR;
+		expbuf.plane = n;
+
+		if (ioctl(vid->fd, VIDIOC_EXPBUF, &expbuf) < 0) {
+			err("Failed to export CAPTURE buffer index%d (%s)",
+			    index, strerror(errno));
+			return -1;
+		}
+
+		info("Exported CAPTURE buffer index%d (plane%d) with fd %d",
+		     index, n, expbuf.fd);
+	}
+
+	return 0;
+}
+
 static int video_queue_buf(struct instance *i, int n, int l1, int l2, int type,
-			   int nplanes)
+			   int nplanes, int dmabuf)
 {
 	struct video *vid = &i->video;
 	struct v4l2_buffer buf;
@@ -97,7 +125,7 @@ static int video_queue_buf(struct instance *i, int n, int l1, int l2, int type,
 	memzero(buf);
 	memset(planes, 0, sizeof(planes));
 	buf.type = type;
-	buf.memory = V4L2_MEMORY_MMAP;
+	buf.memory = dmabuf ? V4L2_MEMORY_DMABUF : V4L2_MEMORY_MMAP;
 	buf.index = n;
 	buf.length = nplanes;
 	buf.m.planes = planes;
@@ -140,7 +168,8 @@ int video_queue_buf_out(struct instance *i, int n, int length)
 	}
 
 	return video_queue_buf(i, n, length, 0,
-			       V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE, OUT_PLANES);
+			       V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
+			       OUT_PLANES, 0);
 }
 
 int video_queue_buf_cap(struct instance *i, int n)
@@ -153,7 +182,8 @@ int video_queue_buf_cap(struct instance *i, int n)
 	}
 
 	return video_queue_buf(i, n, vid->cap_buf_size[0], vid->cap_buf_size[1],
-			       V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE, CAP_PLANES);
+			       V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+			       CAP_PLANES, 0);
 }
 
 static int video_dequeue_buf(struct instance *i, struct v4l2_buffer *buf)
@@ -294,7 +324,7 @@ int video_stop(struct instance *i)
 	return 0;
 }
 
-int video_setup_capture(struct instance *i, int extra_buf, int w, int h)
+int video_setup_capture(struct instance *i, int count, int w, int h)
 {
 	struct video *vid = &i->video;
 	struct v4l2_format fmt;
@@ -320,8 +350,8 @@ int video_setup_capture(struct instance *i, int extra_buf, int w, int h)
 	vid->cap_buf_size[0] = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 	vid->cap_buf_size[1] = fmt.fmt.pix_mp.plane_fmt[1].sizeimage;
 
-	vid->cap_buf_cnt = 4 + extra_buf;
-	vid->cap_buf_cnt_min = 4;
+	vid->cap_buf_cnt = count;
+	vid->cap_buf_cnt_min = 1;
 	vid->cap_buf_queued = 0;
 
 	dbg("video decoder buffer parameters: %dx%d plane[0]=%d plane[1]=%d",
@@ -385,12 +415,24 @@ int video_setup_output(struct instance *i, unsigned long codec,
 		       unsigned int size, int count)
 {
 	struct video *vid = &i->video;
-	struct v4l2_format fmt;
+	struct v4l2_format fmt, try_fmt;
 	struct v4l2_requestbuffers reqbuf;
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[OUT_PLANES];
 	int ret;
 	int n;
+
+	memzero(try_fmt);
+	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+	fmt.fmt.pix_mp.pixelformat = codec;
+
+	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &fmt);
+	if (ret) {
+		err("Failed to try format on OUTPUT (%s)", strerror(errno));
+	}
+
+	dbg("Try OUTPUT format sizeimage=%u",
+	    fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 
 	memzero(fmt);
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;

@@ -35,7 +35,7 @@ INCLUDES = -I$(KERNELHEADERS) -I/usr/include/drm
 SOURCES = main.c drm.c fileops.c args.c parser.c video.c queue.c
 OBJECTS := $(SOURCES:.c=.o)
 EXEC = v4l2_decode
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -std=gnu99
 #-Os
 LIBS = -lpthread -ldrm_freedreno -lm
 LIBPATH = -L/usr/lib/aarch64-linux-gnu

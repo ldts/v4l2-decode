@@ -184,6 +184,8 @@ int save_frame(struct instance *i, const void *buf, unsigned int size)
 	int ret;
 	static unsigned int frame_num = 0;
 
+	drm_display_buf(buf, size, i->width, i->height);
+
 	if (!i->save_frames)
 		return 0;
 
@@ -357,6 +359,10 @@ int main(int argc, char **argv)
 	pthread_t main_thread;
 	int ret, n;
 
+	ret = drm_init();
+	if (ret)
+		return -1;
+
 	ret = parse_args(&inst, argc, argv);
 	if (ret) {
 		print_usage(argv[0]);
@@ -439,8 +445,6 @@ int main(int argc, char **argv)
 	pthread_mutex_destroy(&inst.lock);
 
 	info("Total frames captured %ld", vid->total_captured);
-
-	drm_test();
 
 	return 0;
 err:

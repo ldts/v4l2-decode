@@ -29,6 +29,7 @@
 
 #include "parser.h"
 #include "queue.h"
+#include "drm-funcs.h"
 
 /* When ADD_DETAILS is defined every debug and error message contains
  * information about the file, function and line of code where it has
@@ -184,6 +185,8 @@ struct instance {
 	int error;   /* The error flag */
 	int finish;  /* Flag set when decoding has been completed and all
 			threads finish */
+
+	struct drm_buffer disp_buf[MAX_CAP_BUF];
 };
 
 #endif /* INCLUDE_COMMON_H */

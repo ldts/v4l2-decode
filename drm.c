@@ -1,4 +1,3 @@
-#define _XOPEN_SOURCE 600
 
 #include <errno.h>
 #include <stdio.h>
@@ -11,6 +10,8 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
+
+#include "drm-funcs.h"
 
 static const char *dri_path = "/dev/dri/card0";
 
@@ -27,18 +28,23 @@ struct buffer {
 	int dbuf_fd;
 };
 
-struct drm_dev_t {
-	uint8_t *buf;
-	uint32_t conn_id, enc_id, crtc_id, fb_id;
-	uint32_t plane_id;
+struct drm_dev {
+	uint32_t conn_id, enc_id, crtc_id, fb_id, plane_id;
 	uint32_t width, height;
 	uint32_t pitch, size, handle;
+
 	drmModeModeInfo mode;
 	drmModeCrtc *saved_crtc;
-	struct drm_dev_t *next;
+
 	int fd;
-	struct buffer buffers[32];
+
+	uint8_t *buf;
+	struct drm_buffer buffers[32];
+
+	struct drm_dev *next;
 };
+
+static struct drm_dev *pdev;
 
 static void fatal(char *str)
 {
@@ -50,17 +56,6 @@ static void error(char *str)
 {
 	perror(str);
 	exit(EXIT_FAILURE);
-}
-
-static int eopen(const char *path, int flag)
-{
-	int fd;
-
-	if ((fd = open(path, flag)) < 0) {
-		fprintf(stderr, "cannot open \"%s\"\n", path);
-		error("open");
-	}
-	return fd;
 }
 
 static void *emmap(int addr, size_t len, int prot, int flag, int fd, off_t offset)
@@ -76,25 +71,39 @@ static int drm_open(const char *path)
 {
 	int fd, flags;
 	uint64_t has_dumb;
+	int ret;
 
-	fd = eopen(path, O_RDWR);
+	fd = open(path, O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "cannot open \"%s\"\n", path);
+		return -1;
+	}
 
 	/* set FD_CLOEXEC flag */
-	if ((flags = fcntl(fd, F_GETFD)) < 0
-		|| fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0)
-		fatal("fcntl FD_CLOEXEC failed");
+	if ((flags = fcntl(fd, F_GETFD)) < 0 ||
+	     fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
+		fprintf(stderr, "fcntl FD_CLOEXEC failed\n");
+		goto err;
+	}
 
 	/* check capability */
-	if (drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb) < 0 || has_dumb == 0)
-		fatal("drmGetCap DRM_CAP_DUMB_BUFFER failed or doesn't have dumb buffer");
+	ret = drmGetCap(fd, DRM_CAP_DUMB_BUFFER, &has_dumb);
+	if (ret < 0 || has_dumb == 0) {
+		fprintf(stderr, "drmGetCap DRM_CAP_DUMB_BUFFER failed or "
+			"doesn't have dumb buffer\n");
+		goto err;
+	}
 
 	return fd;
+err:
+	close(fd);
+	return -1;
 }
 
-static struct drm_dev_t *drm_find_dev(int fd)
+static struct drm_dev *drm_find_dev(int fd)
 {
 	int i;
-	struct drm_dev_t *dev = NULL, *dev_head = NULL;
+	struct drm_dev *dev = NULL, *dev_head = NULL;
 	drmModeRes *res;
 	drmModeConnector *conn;
 	drmModeEncoder *enc;
@@ -112,9 +121,8 @@ static struct drm_dev_t *drm_find_dev(int fd)
 		conn = drmModeGetConnector(fd, res->connectors[i]);
 
 		if (conn) {
-			printf("connector: %p\n", conn);
+			printf("connector: ");
 
-			printf("connection: ");
 			if (conn->connection == DRM_MODE_CONNECTED)
 				printf("connected");
 			else if (conn->connection == DRM_MODE_DISCONNECTED)
@@ -128,8 +136,8 @@ static struct drm_dev_t *drm_find_dev(int fd)
 
 		if (conn != NULL && conn->connection == DRM_MODE_CONNECTED
 		    && conn->count_modes > 0) {
-			dev = (struct drm_dev_t *) malloc(sizeof(struct drm_dev_t));
-			memset(dev, 0, sizeof(struct drm_dev_t));
+			dev = (struct drm_dev *) malloc(sizeof(struct drm_dev));
+			memset(dev, 0, sizeof(struct drm_dev));
 
 			dev->conn_id = conn->connector_id;
 			dev->enc_id = conn->encoder_id;
@@ -160,7 +168,26 @@ free_res:
 	return dev_head;
 }
 
-static int buffer_create(int fd, struct buffer *b, struct drm_dev_t *dev,
+static int buffer_destroy(int fd, struct drm_buffer *b)
+{
+	struct drm_mode_destroy_dumb gem_destroy;
+	int ret;
+
+	close(b->dbuf_fd);
+
+	memset(&gem_destroy, 0, sizeof gem_destroy);
+	gem_destroy.handle = b->bo_handle,
+
+	ret = drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &gem_destroy);
+	if (ret < 0) {
+		fprintf(stderr, "DESTROY_DUMB failed: %s\n", strerror(errno));
+		return ret;
+	}
+
+	return 0;
+}
+
+static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 			 uint64_t *size, uint32_t pitch)
 {
 	struct drm_mode_create_dumb gem;
@@ -200,7 +227,8 @@ static int buffer_create(int fd, struct buffer *b, struct drm_dev_t *dev,
 
 	ret = drmIoctl(fd, DRM_IOCTL_PRIME_HANDLE_TO_FD, &prime);
 	if (ret) {
-		fprintf(stderr, "PRIME_HANDLE_TO_FD failed: %s\n", strerror(errno));
+		fprintf(stderr, "PRIME_HANDLE_TO_FD failed: %s\n",
+			strerror(errno));
 		goto fail_gem;
 	}
 
@@ -239,6 +267,7 @@ fail_prime:
 fail_gem:
 	memset(&gem_destroy, 0, sizeof gem_destroy);
 	gem_destroy.handle = b->bo_handle,
+
 	ret = drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &gem_destroy);
 	if (ret)
 		fprintf(stderr, "DESTROY_DUMB failed: %s\n", strerror(errno));
@@ -246,7 +275,7 @@ fail_gem:
 	return -1;
 }
 
-static void drm_setup_fb(int fd, struct drm_dev_t *dev)
+static void drm_setup_fb(int fd, struct drm_dev *dev)
 {
 	struct drm_mode_create_dumb creq;
 	struct drm_mode_map_dumb mreq;
@@ -284,9 +313,9 @@ static void drm_setup_fb(int fd, struct drm_dev_t *dev)
 		fatal("drmModeSetCrtc() failed");
 }
 
-static void drm_destroy(int fd, struct drm_dev_t *dev_head)
+static void drm_destroy(int fd, struct drm_dev *dev_head)
 {
-	struct drm_dev_t *devp, *devp_tmp;
+	struct drm_dev *devp, *devp_tmp;
 	struct drm_mode_destroy_dumb dreq;
 
 	for (devp = dev_head; devp != NULL;) {
@@ -365,9 +394,9 @@ static int find_plane(int fd, uint32_t *plane_id, uint32_t crtc_id)
 	return ret;
 }
 
-static int display_file(struct drm_dev_t *dev)
+static int display_file(struct drm_dev *dev)
 {
-	struct buffer *buffer = &dev->buffers[0];
+	struct drm_buffer *buffer = &dev->buffers[0];
 	struct stat in_stat;
 	int inputfd;
 	uint32_t y_stride = 1280;
@@ -426,34 +455,81 @@ static int display_file(struct drm_dev_t *dev)
 			      buffer->fb_handle, 0,
 			      0, 0, 1280, 720,
 			      0, 0, 1280 << 16, 720 << 16);
+	if (ret) {
+		fprintf(stderr, "SetPlane failed\n");
+		goto err_unmap;
+	}
 
 	getchar();
 
 	return 0;
 
+err_unmap:
+	munmap(p, in_stat.st_size);
 err_close:
 	close(inputfd);
+
 	return -1;
 }
 
-static struct drm_dev_t *pdev;
+int drm_create_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
+{
+	struct drm_dev *dev = pdev;
+	int fd = dev->fd;
+	uint64_t size = (dev->width * dev->height * 3 / 2) / 2;
+	uint32_t pitch = dev->width;
+	struct drm_buffer *buf;
+	int ret;
+
+	for (unsigned int i = 0; i < count; ++i) {
+		buf = &buffers[i];
+
+		ret = buffer_create(fd, buf, dev, &size, pitch);
+		if (ret) {
+			fprintf(stderr, "failed to create buffer%d\n", i);
+			break;
+		}
+
+		if (!mmaped)
+			continue;
+
+		struct drm_mode_map_dumb mreq;
+		memset(&mreq, 0, sizeof(mreq));
+		mreq.handle = buf->bo_handle;
+
+		if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq)) {
+			fprintf(stderr, "DRM_IOCTL_MODE_MAP_DUMB failed");
+			goto err;
+		}
+
+		buf->mmap_buf = mmap(0, size, PROT_READ | PROT_WRITE,
+				     MAP_SHARED, fd, mreq.offset);
+		if (buf->mmap_buf == MAP_FAILED) {
+			fprintf(stderr, "mmap failed\n");
+			goto err;
+		}
+	}
+
+	return 0;
+
+err:
+	return -1;
+}
 
 int drm_init(void)
 {
+	struct drm_dev *dev_head, *dev;
 	int fd;
-	int i, j;
-	uint8_t color;
-	struct drm_dev_t *dev_head, *dev;
-	uint32_t plane_id;
 	int ret;
 
-	/* init */
 	fd = drm_open(dri_path);
-	dev_head = drm_find_dev(fd);
+	if (fd < 0)
+		return -1;
 
+	dev_head = drm_find_dev(fd);
 	if (dev_head == NULL) {
 		fprintf(stderr, "available drm_dev not found\n");
-		return EXIT_FAILURE;
+		goto err;
 	}
 
 	printf("available connector(s)\n\n");
@@ -467,90 +543,51 @@ int drm_init(void)
 
 	/* FIXME: use first drm_dev */
 	dev = dev_head;
-
 	dev->fd = fd;
 	pdev = dev;
 
-	ret = find_plane(fd, &plane_id, dev->crtc_id);
-	if (!ret)
-		printf("Found NV12 plane_id: %x\n", plane_id);
-
-	{
-		int buffer_count = 1;
-		struct buffer *buffer = &dev->buffers[0];
-		uint64_t size = ((dev->width *  dev->height * 3 / 2) / 2);
-		uint64_t *sz = &size;
-		uint32_t pitch = dev->width;
-		struct drm_mode_map_dumb mreq;
-		uint8_t *buf;
-
-		printf("size = %lu pitch = %u\n", size, pitch);
-
-		for (unsigned int i = 0; i < buffer_count; ++i) {
-			ret = buffer_create(fd, buffer, dev, sz, pitch);
-			if (ret)
-				fprintf(stderr, "failed to create buffer%d\n", i);
-		}
-
-		if (!ret)
-			printf("buffers ready\n");
-
-		dev->plane_id = plane_id;
-
-		memset(&mreq, 0, sizeof(mreq));
-		mreq.handle = buffer[0].bo_handle;
-
-		if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq))
-			fatal("drmIoctl DRM_IOCTL_MODE_MAP_DUMB failed");
-
-		buf = emmap(0, *sz, PROT_READ | PROT_WRITE, MAP_SHARED,
-			    fd, mreq.offset);
-
-		dev->buf = buf;
+	ret = find_plane(fd, &dev->plane_id, dev->crtc_id);
+	if (ret) {
+		fprintf(stderr, "Cannot find plane\n");
+		goto err;
 	}
 
-#if 0
-	drm_setup_fb(fd, dev);
-
-	/* draw something */
-	for (i = 0; i < dev->height; i++)
-		for (j = 0; j < dev->width; j++) {
-			color = (double) (i * j) / (dev->height * dev->width) * 0xFF;
-			*(dev->buf + i * dev->width + j) = (uint32_t) 0xFFFFFF & (0x00 << 16 | color << 8 | color);
-		}
-
-	sleep(3);
-
-	/* destroy */
-	drm_destroy(fd, dev_head);
-#endif
-
+	printf("Found NV12 plane_id: %x\n", dev->plane_id);
 
 	return 0;
+
+err:
+	close(fd);
+	return -1;
 }
 
-int drm_deinit()
+int drm_deinit(void)
 {
-	struct drm_dev_t *dev = pdev;
+	struct drm_dev *dev = pdev;
 
 	munmap(dev->buf, dev->size);
 
 	return 0;
 }
 
-int drm_display_buf(const void *src, unsigned int size, unsigned int width,
-		    unsigned int height)
+int drm_display_buf(const void *src, struct drm_buffer *b, unsigned int size,
+		    unsigned int width, unsigned int height)
 {
-	struct drm_dev_t *dev = pdev;
-	struct buffer *buffer = &dev->buffers[0];
+	struct drm_dev *dev = pdev;
 	uint32_t y_stride = ALIGN(width, 128);
 	uint32_t y_scanlines = ALIGN(height, 32);
 	uint32_t uv_stride = ALIGN(width, 128);
 	uint32_t uv_scanlines = ALIGN(height / 2, 16);
-	uint8_t *from = src;
-	uint8_t *to = dev->buf;
+	uint8_t *from;
+	uint8_t *to;
 	int ret;
 	int i;
+
+	if (b->mmap_buf == MAP_FAILED)
+		goto set_plane;
+
+	from = (uint8_t *)src;
+	to = b->mmap_buf;
 
 	/* Y plane */
 	for (i = 0; i < y_scanlines; ++i) {
@@ -561,8 +598,8 @@ int drm_display_buf(const void *src, unsigned int size, unsigned int width,
 	}
 
 	/* UV plane */
-	from = src;
-	to = dev->buf;
+	from = (uint8_t *)src;
+	to = b->mmap_buf;
 
 	from += y_stride * y_scanlines;
 	to += dev->width * dev->height;
@@ -574,10 +611,12 @@ int drm_display_buf(const void *src, unsigned int size, unsigned int width,
 		from += uv_stride;
 	}
 
+set_plane:
+
 	ret = drmModeSetPlane(dev->fd, dev->plane_id, dev->crtc_id,
-			      buffer->fb_handle, 0,
-			      0, 0, 1280, 720,
-			      0, 0, 1280 << 16, 720 << 16);
+			      b->fb_handle, 0,
+			      0, 0, width, height,
+			      0, 0, width << 16, height << 16);
 
 	return ret;
 }

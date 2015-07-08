@@ -114,8 +114,8 @@ int video_export_buf(struct instance *i, int index)
 	return 0;
 }
 
-static int video_queue_buf(struct instance *i, int n, int l1, int l2, int type,
-			   int nplanes, int dmabuf)
+static int video_queue_buf(struct instance *i, int index, int l1, int l2,
+			   int type, int nplanes)
 {
 	struct video *vid = &i->video;
 	struct v4l2_buffer buf;
@@ -125,8 +125,8 @@ static int video_queue_buf(struct instance *i, int n, int l1, int l2, int type,
 	memzero(buf);
 	memset(planes, 0, sizeof(planes));
 	buf.type = type;
-	buf.memory = dmabuf ? V4L2_MEMORY_DMABUF : V4L2_MEMORY_MMAP;
-	buf.index = n;
+	buf.memory = V4L2_MEMORY_MMAP;
+	buf.index = index;
 	buf.length = nplanes;
 	buf.m.planes = planes;
 
@@ -146,9 +146,10 @@ static int video_queue_buf(struct instance *i, int n, int l1, int l2, int type,
 
 	ret = ioctl(vid->fd, VIDIOC_QBUF, &buf);
 	if (ret) {
-		err("Failed to queue buffer (index=%d) on %s (ret:%d)",
+		err("Failed to queue buffer (index=%d) on %s (%s)",
 		    buf.index,
-		    dbg_type[type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE], ret);
+		    dbg_type[type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE],
+		    strerror(errno));
 		return -1;
 	}
 
@@ -169,21 +170,66 @@ int video_queue_buf_out(struct instance *i, int n, int length)
 
 	return video_queue_buf(i, n, length, 0,
 			       V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE,
-			       OUT_PLANES, 0);
+			       OUT_PLANES);
 }
 
-int video_queue_buf_cap(struct instance *i, int n)
+int video_queue_buf_cap(struct instance *i, int index)
 {
 	struct video *vid = &i->video;
 
-	if (n >= vid->cap_buf_cnt) {
+	if (index >= vid->cap_buf_cnt) {
 		err("Tried to queue a non exisiting buffer");
 		return -1;
 	}
 
-	return video_queue_buf(i, n, vid->cap_buf_size[0], vid->cap_buf_size[1],
+	return video_queue_buf(i, index, vid->cap_buf_size[0],
+			       vid->cap_buf_size[1],
 			       V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-			       CAP_PLANES, 0);
+			       CAP_PLANES);
+}
+
+int video_queue_buf_cap_dmabuf(struct instance *i, int index,
+			       struct drm_buffer *b)
+{
+	struct video *vid = &i->video;
+	struct v4l2_buffer buf;
+	struct v4l2_plane planes[2];
+	int ret;
+
+	if (index >= vid->cap_buf_cnt) {
+		err("Tried to queue a non exisiting buffer");
+		return -1;
+	}
+
+	memzero(buf);
+	memset(planes, 0, sizeof(planes));
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	buf.memory = V4L2_MEMORY_DMABUF;
+	buf.index = index;
+	buf.length = CAP_PLANES;
+	buf.m.planes = planes;
+
+	buf.m.planes[0].m.fd = b->dbuf_fd;
+
+	buf.m.planes[0].bytesused = vid->cap_buf_size[0];
+	buf.m.planes[1].bytesused = vid->cap_buf_size[1];
+
+	buf.m.planes[0].data_offset = 0;
+	buf.m.planes[1].data_offset = 0;
+
+	buf.m.planes[0].length = vid->cap_buf_size[0];
+
+	ret = ioctl(vid->fd, VIDIOC_QBUF, &buf);
+	if (ret) {
+		err("Failed to queue buffer (index=%d) on CAPTURE (%s)",
+		    buf.index, strerror(errno));
+		return -1;
+	}
+
+	dbg("  Queued buffer on %s queue with index %d",
+	    dbg_type[1], buf.index);
+
+	return 0;
 }
 
 static int video_dequeue_buf(struct instance *i, struct v4l2_buffer *buf)
@@ -234,6 +280,33 @@ int video_dequeue_capture(struct instance *i, int *n, int *finished,
 	memzero(buf);
 	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	buf.memory = V4L2_MEMORY_MMAP;
+	buf.m.planes = planes;
+	buf.length = CAP_PLANES;
+
+	if (video_dequeue_buf(i, &buf))
+		return -1;
+
+	*finished = 0;
+
+	if (buf.flags & V4L2_QCOM_BUF_FLAG_EOS ||
+	    buf.m.planes[0].bytesused == 0)
+		*finished = 1;
+
+	*bytesused = buf.m.planes[0].bytesused;
+	*n = buf.index;
+
+	return 0;
+}
+
+int video_dequeue_capture_dmabuf(struct instance *i, int *n, int *finished,
+				 unsigned int *bytesused)
+{
+	struct v4l2_buffer buf;
+	struct v4l2_plane planes[CAP_PLANES];
+
+	memzero(buf);
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	buf.memory = V4L2_MEMORY_DMABUF;
 	buf.m.planes = planes;
 	buf.length = CAP_PLANES;
 
@@ -369,8 +442,8 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 		return -1;
 	}
 
-	dbg("Number of CAPTURE buffers is %d (requested %d, extra %d)",
-	    reqbuf.count, vid->cap_buf_cnt, extra_buf);
+	info("Number of CAPTURE buffers is %d (requested %d, extra %d)",
+		reqbuf.count, vid->cap_buf_cnt, 0);
 
 	vid->cap_buf_cnt = reqbuf.count;
 
@@ -406,6 +479,81 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 		vid->cap_buf_size[0] = buf.m.planes[0].length;
 	}
 
+	dbg("Succesfully mmapped %d CAPTURE buffers", n);
+
+	return 0;
+}
+
+int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
+{
+	struct video *vid = &i->video;
+	struct v4l2_format fmt;
+	struct v4l2_requestbuffers reqbuf;
+	struct v4l2_buffer buf;
+	struct v4l2_plane planes[CAP_PLANES];
+	int ret;
+	int n;
+
+	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	fmt.fmt.pix_mp.height = h;
+	fmt.fmt.pix_mp.width = w;
+	fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
+	ret = ioctl(vid->fd, VIDIOC_S_FMT, &fmt);
+	if (ret) {
+		err("Failed to set format (%dx%d)", w, h);
+		return -1;
+	}
+
+	vid->cap_w = fmt.fmt.pix_mp.width;
+	vid->cap_h = fmt.fmt.pix_mp.height;
+
+	vid->cap_buf_size[0] = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
+	vid->cap_buf_size[1] = fmt.fmt.pix_mp.plane_fmt[1].sizeimage;
+
+	vid->cap_buf_cnt = count;
+	vid->cap_buf_cnt_min = 1;
+	vid->cap_buf_queued = 0;
+
+	dbg("video decoder buffer parameters: %dx%d plane[0]=%d plane[1]=%d",
+	    fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
+	    vid->cap_buf_size[0], vid->cap_buf_size[1]);
+
+	memzero(reqbuf);
+	reqbuf.count = vid->cap_buf_cnt;
+	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	reqbuf.memory = V4L2_MEMORY_DMABUF;
+
+	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
+	if (ret != 0) {
+		err("REQBUFS failed on CAPTURE queue (%s)", strerror(errno));
+		return -1;
+	}
+
+	info("Number of CAPTURE buffers is %d (requested %d, extra %d)",
+		reqbuf.count, vid->cap_buf_cnt, 0);
+
+	vid->cap_buf_cnt = reqbuf.count;
+#if 0
+	for (n = 0; n < vid->cap_buf_cnt; n++) {
+		memzero(buf);
+		memset(planes, 0, sizeof(planes));
+		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+		buf.memory = V4L2_MEMORY_DMABUF;
+		buf.index = n;
+		buf.m.planes = planes;
+		buf.length = CAP_PLANES;
+
+		ret = ioctl(vid->fd, VIDIOC_QUERYBUF, &buf);
+		if (ret != 0) {
+			err("QUERYBUF failed on CAPTURE queue (%s)",
+			    strerror(errno));
+			return -1;
+		}
+
+		vid->cap_buf_off[n][0] = buf.m.planes[0].m.mem_offset;
+		vid->cap_buf_size[0] = buf.m.planes[0].length;
+	}
+#endif
 	dbg("Succesfully mmapped %d CAPTURE buffers", n);
 
 	return 0;

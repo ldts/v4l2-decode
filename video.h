@@ -42,12 +42,15 @@ int video_setup_output(struct instance *i, unsigned long codec,
  * by MFC. The final number of buffers allocated is stored in the instance
  * structure. */
 int video_setup_capture(struct instance *i, int extra_buf, int w, int h);
+int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h);
 
 /* Queue OUTPUT buffer */
 int video_queue_buf_out(struct instance *i, int n, int length);
 
 /* Queue CAPTURE buffer */
 int video_queue_buf_cap(struct instance *i, int n);
+int video_queue_buf_cap_dmabuf(struct instance *i, int index,
+			       struct drm_buffer *b);
 
 /* Control MFC streaming */
 int video_stream(struct instance *i, enum v4l2_buf_type type, int status);

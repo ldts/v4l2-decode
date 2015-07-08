@@ -184,7 +184,7 @@ int save_frame(struct instance *i, const void *buf, unsigned int size)
 	int ret;
 	static unsigned int frame_num = 0;
 
-	drm_display_buf(buf, size, i->width, i->height);
+	drm_display_buf(buf, &i->disp_buf[0], size, i->width, i->height);
 
 	if (!i->save_frames)
 		return 0;
@@ -359,10 +359,6 @@ int main(int argc, char **argv)
 	pthread_t main_thread;
 	int ret, n;
 
-	ret = drm_init();
-	if (ret)
-		return -1;
-
 	ret = parse_args(&inst, argc, argv);
 	if (ret) {
 		print_usage(argv[0]);
@@ -374,6 +370,10 @@ int main(int argc, char **argv)
 	pthread_mutex_init(&inst.lock, 0);
 
 	vid->total_captured = 0;
+
+	ret = drm_init();
+	if (ret)
+		goto err;
 
 	ret = parse_stream_init(&inst.parser.ctx);
 	if (ret)
@@ -409,8 +409,14 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
+#if 0
 	for (n = 0; n < vid->cap_buf_cnt; n++)
 		video_export_buf(&inst, n);
+#endif
+
+	ret = drm_create_bufs(&inst.disp_buf[0], 1, 1);
+	if (ret)
+		goto err;
 
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {

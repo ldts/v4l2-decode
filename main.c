@@ -184,8 +184,6 @@ int save_frame(struct instance *i, const void *buf, unsigned int size)
 	int ret;
 	static unsigned int frame_num = 0;
 
-	drm_display_buf(buf, &i->disp_buf[0], size, i->width, i->height);
-
 	if (!i->save_frames)
 		return 0;
 
@@ -316,6 +314,10 @@ void *main_thread_func(void *args)
 				break;
 
 			vid->total_captured++;
+
+			drm_display_buf(vid->cap_buf_addr[n][0],
+					&i->disp_buf[0], bytesused,
+					i->width, i->height);
 
 			save_frame(i, (void *)vid->cap_buf_addr[n][0],
 				   bytesused);

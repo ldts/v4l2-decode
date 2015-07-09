@@ -583,7 +583,7 @@ int drm_display_buf(const void *src, struct drm_buffer *b, unsigned int size,
 	int ret;
 	int i;
 
-	if (b->mmap_buf == MAP_FAILED)
+	if (b->mmap_buf == MAP_FAILED || b->mmap_buf == NULL)
 		goto set_plane;
 
 	from = (uint8_t *)src;

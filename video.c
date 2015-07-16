@@ -489,10 +489,7 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 	struct video *vid = &i->video;
 	struct v4l2_format fmt;
 	struct v4l2_requestbuffers reqbuf;
-	struct v4l2_buffer buf;
-	struct v4l2_plane planes[CAP_PLANES];
 	int ret;
-	int n;
 
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	fmt.fmt.pix_mp.height = h;
@@ -533,28 +530,8 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 		reqbuf.count, vid->cap_buf_cnt, 0);
 
 	vid->cap_buf_cnt = reqbuf.count;
-#if 0
-	for (n = 0; n < vid->cap_buf_cnt; n++) {
-		memzero(buf);
-		memset(planes, 0, sizeof(planes));
-		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-		buf.memory = V4L2_MEMORY_DMABUF;
-		buf.index = n;
-		buf.m.planes = planes;
-		buf.length = CAP_PLANES;
 
-		ret = ioctl(vid->fd, VIDIOC_QUERYBUF, &buf);
-		if (ret != 0) {
-			err("QUERYBUF failed on CAPTURE queue (%s)",
-			    strerror(errno));
-			return -1;
-		}
-
-		vid->cap_buf_off[n][0] = buf.m.planes[0].m.mem_offset;
-		vid->cap_buf_size[0] = buf.m.planes[0].length;
-	}
-#endif
-	dbg("Succesfully mmapped %d CAPTURE buffers", n);
+	dbg("Succesfully requested %d dmabuf CAPTURE buffers", vid->cap_buf_cn);
 
 	return 0;
 }

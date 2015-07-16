@@ -62,6 +62,8 @@ int video_export_buf(struct instance *i, int index);
 int video_dequeue_output(struct instance *i, int *n);
 int video_dequeue_capture(struct instance *i, int *n, int *finished,
 			  unsigned int *bytesused);
+int video_dequeue_capture_dmabuf(struct instance *i, int *n, int *finished,
+				 unsigned int *bytesused);
 
 int video_set_control(struct instance *i);
 

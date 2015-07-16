@@ -98,24 +98,6 @@ struct input {
 	int offs;
 };
 
-/* Frame buffer related parameters */
-struct fb {
-	char *name;
-	int fd;
-	char *p[FB_MAX_BUFS];
-	int cur_buf;
-	int buffers;
-	int width;
-	int height;
-	int virt_width;
-	int virt_height;
-	int bpp;
-	int stride;
-	int size;
-	int full_size;
-	int double_buf;
-};
-
 /* video decoder related parameters */
 struct video {
 	char *name;
@@ -166,11 +148,10 @@ struct instance {
 	int save_frames;
 	char *save_path;
 
+	int use_dmabuf;
+
 	/* Input file related parameters */
 	struct input	in;
-
-	/* Frame buffer related parameters */
-	struct fb	fb;
 
 	/* video decoder related parameters */
 	struct video	video;

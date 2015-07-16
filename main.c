@@ -301,8 +301,12 @@ void *main_thread_func(void *args)
 
 			/* capture buffer is ready */
 
-			ret = video_dequeue_capture(i, &n, &finished,
-						    &bytesused);
+			if (i->use_dmabuf)
+				ret = video_dequeue_capture_dmabuf(
+						i, &n, &finished, &bytesused);
+			else
+				ret = video_dequeue_capture(i, &n, &finished,
+							    &bytesused);
 			if (ret < 0)
 				goto next_event;
 
@@ -316,13 +320,18 @@ void *main_thread_func(void *args)
 			vid->total_captured++;
 
 			drm_display_buf(vid->cap_buf_addr[n][0],
-					&i->disp_buf[0], bytesused,
+					&i->disp_buf[n], bytesused,
 					i->width, i->height);
 
 			save_frame(i, (void *)vid->cap_buf_addr[n][0],
 				   bytesused);
 
-			ret = video_queue_buf_cap(i, n);
+			if (i->use_dmabuf)
+				ret = video_queue_buf_cap_dmabuf(
+							i, n, &i->disp_buf[n]);
+			else
+				ret = video_queue_buf_cap(i, n);
+
 			if (!ret)
 				vid->cap_buf_flag[n] = 1;
 		}
@@ -403,11 +412,20 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
-	ret = video_setup_capture(&inst, 2, inst.width, inst.height);
+	if (inst.use_dmabuf)
+		ret = video_setup_capture_dmabuf(&inst, 2, inst.width,
+						 inst.height);
+	else
+		ret = video_setup_capture(&inst, 2, inst.width, inst.height);
 	if (ret)
 		goto err;
 
-	ret = drm_create_bufs(&inst.disp_buf[0], 1, inst.width, inst.height, 1);
+	if (inst.use_dmabuf)
+		ret = drm_create_bufs(&inst.disp_buf[0], vid->cap_buf_cnt,
+				      inst.width, inst.height, 0);
+	else
+		ret = drm_create_bufs(&inst.disp_buf[0], 1, inst.width,
+				      inst.height, 1);
 	if (ret)
 		goto err;
 
@@ -422,9 +440,15 @@ int main(int argc, char **argv)
 
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {
-		ret = video_queue_buf_cap(&inst, n);
+		if (inst.use_dmabuf)
+			ret = video_queue_buf_cap_dmabuf(&inst, n,
+							 &inst.disp_buf[n]);
+		else
+			ret = video_queue_buf_cap(&inst, n);
+
 		if (ret)
 			goto err;
+
 		vid->cap_buf_flag[n] = 1;
 	}
 

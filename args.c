@@ -37,7 +37,7 @@ void print_usage(char *name)
 	printf("\t%s\n", name);
 	printf("\t-c <codec> - The codec of the encoded stream\n");
 	printf("\t\t     Available codecs: mpeg4, h264\n");
-	printf("\t-d <device>  - Frame buffer device (e.g. /dev/fb0)\n");
+	printf("\t-d use dmabuf instead of mmap\n");
 	printf("\t-i <file> - Input file name\n");
 	printf("\t-m <device> - video decoder device (e.g. /dev/video8)\n");
 	printf("\t-w video width\n");
@@ -76,13 +76,13 @@ int parse_args(struct instance *i, int argc, char **argv)
 
 	init_to_defaults(i);
 
-	while ((c = getopt(argc, argv, "w:h:c:d:i:m:f:")) != -1) {
+	while ((c = getopt(argc, argv, "w:h:c:di:m:f:")) != -1) {
 		switch (c) {
 		case 'c':
 			i->parser.codec = get_codec(optarg);
 			break;
 		case 'd':
-			i->fb.name = optarg;
+			i->use_dmabuf = 1;
 			break;
 		case 'i':
 			i->in.name = optarg;

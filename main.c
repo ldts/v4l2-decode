@@ -276,7 +276,7 @@ void *main_thread_func(void *args)
 	struct video *vid = &i->video;
 	struct pollfd pfd;
 	short revents;
-	int ret, n, finished;
+	int ret, n, finished, disp_idx;
 
 	dbg("main thread started");
 
@@ -319,8 +319,10 @@ void *main_thread_func(void *args)
 
 			vid->total_captured++;
 
+			disp_idx = i->use_dmabuf ? n : 0;
+
 			drm_display_buf(vid->cap_buf_addr[n][0],
-					&i->disp_buf[n], bytesused,
+					&i->disp_buf[disp_idx], bytesused,
 					i->width, i->height);
 
 			save_frame(i, (void *)vid->cap_buf_addr[n][0],

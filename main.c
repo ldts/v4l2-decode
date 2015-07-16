@@ -407,6 +407,10 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
+	ret = drm_create_bufs(&inst.disp_buf[0], 1, inst.width, inst.height, 1);
+	if (ret)
+		goto err;
+
 	ret = extract_and_process_header(&inst);
 	if (ret)
 		goto err;
@@ -415,10 +419,6 @@ int main(int argc, char **argv)
 	for (n = 0; n < vid->cap_buf_cnt; n++)
 		video_export_buf(&inst, n);
 #endif
-
-	ret = drm_create_bufs(&inst.disp_buf[0], 1, 1);
-	if (ret)
-		goto err;
 
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {

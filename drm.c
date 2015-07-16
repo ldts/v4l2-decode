@@ -188,7 +188,8 @@ static int buffer_destroy(int fd, struct drm_buffer *b)
 }
 
 static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
-			 uint64_t *size, uint32_t pitch)
+			 uint64_t *size, uint32_t pitch,
+			 uint32_t width, uint32_t height)
 {
 	struct drm_mode_create_dumb gem;
 	struct drm_mode_destroy_dumb gem_destroy;
@@ -236,6 +237,10 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 
 	b->dbuf_fd = prime.fd;
 
+	uint32_t stride = ALIGN(width, 128);
+	uint32_t y_scanlines = ALIGN(height, 32);
+	uint32_t uv_scanlines = ALIGN(height / 2, 16);
+
 	uint32_t offsets[4] = { 0 };
 	uint32_t pitches[4] = { 0 };
 	uint32_t handles[4] = { 0 };
@@ -243,16 +248,13 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 
 	offsets[0] = 0;
 	handles[0] = b->bo_handle;
-	pitches[0] = gem.pitch;
+	pitches[0] = stride;/*gem.pitch;*/
 
-	offsets[1] = pitches[0] * dev->height;
+	offsets[1] = stride * y_scanlines;/*pitches[0] * dev->height;*/
 	handles[1] = b->bo_handle;
 	pitches[1] = pitches[0];
 
-//	planes[0] = virtual;
-//	planes[1] = virtual + offsets[1];
-
-	ret = drmModeAddFB2(fd, dev->width, dev->height, fourcc, handles,
+	ret = drmModeAddFB2(fd, width, height, fourcc, handles,
 			    pitches, offsets, &b->fb_handle, 0);
 	if (ret) {
 		fprintf(stderr, "drmModeAddFB2 failed: %s\n", strerror(errno));
@@ -472,7 +474,8 @@ err_close:
 	return -1;
 }
 
-int drm_create_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
+int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
+		    unsigned int width, unsigned int height, int mmaped)
 {
 	struct drm_dev *dev = pdev;
 	int fd = dev->fd;
@@ -484,7 +487,7 @@ int drm_create_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
 	for (unsigned int i = 0; i < count; ++i) {
 		buf = &buffers[i];
 
-		ret = buffer_create(fd, buf, dev, &size, pitch);
+		ret = buffer_create(fd, buf, dev, &size, pitch, width, height);
 		if (ret) {
 			fprintf(stderr, "failed to create buffer%d\n", i);
 			break;
@@ -497,23 +500,22 @@ int drm_create_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
 		memset(&mreq, 0, sizeof(mreq));
 		mreq.handle = buf->bo_handle;
 
-		if (drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq)) {
+		ret = drmIoctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq);
+		if (ret) {
 			fprintf(stderr, "DRM_IOCTL_MODE_MAP_DUMB failed");
-			goto err;
+			break;
 		}
 
 		buf->mmap_buf = mmap(0, size, PROT_READ | PROT_WRITE,
 				     MAP_SHARED, fd, mreq.offset);
 		if (buf->mmap_buf == MAP_FAILED) {
+			ret = -1;
 			fprintf(stderr, "mmap failed\n");
-			goto err;
+			break;
 		}
 	}
 
-	return 0;
-
-err:
-	return -1;
+	return ret ? ret : 0;
 }
 
 int drm_init(void)
@@ -588,6 +590,9 @@ int drm_display_buf(const void *src, struct drm_buffer *b, unsigned int size,
 
 	from = (uint8_t *)src;
 	to = b->mmap_buf;
+
+	memcpy(to, from, size);
+	goto set_plane;
 
 	/* Y plane */
 	for (i = 0; i < y_scanlines; ++i) {

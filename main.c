@@ -454,6 +454,10 @@ int main(int argc, char **argv)
 
 	info("Total frames captured %ld", vid->total_captured);
 
+	drm_destroy_bufs(inst.disp_buf, 1, 1);
+
+	drm_deinit();
+
 	return 0;
 err:
 	cleanup(&inst);

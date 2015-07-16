@@ -518,6 +518,27 @@ int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
 	return ret ? ret : 0;
 }
 
+int drm_destroy_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
+{
+	struct drm_dev *dev = pdev;
+	uint64_t size = (dev->width * dev->height * 3 / 2) / 2;
+	struct drm_buffer *buf;
+	int fd = dev->fd;
+
+	for (unsigned int i = 0; i < count; ++i) {
+		buf = &buffers[i];
+
+		if (mmaped)
+			munmap(buf->mmap_buf, size);
+
+		drmModeRmFB(fd, buf->fb_handle);
+
+		buffer_destroy(fd, buf);
+	}
+
+	return 0;
+}
+
 int drm_init(void)
 {
 	struct drm_dev *dev_head, *dev;
@@ -566,8 +587,9 @@ err:
 int drm_deinit(void)
 {
 	struct drm_dev *dev = pdev;
+	int fd = dev->fd;
 
-	munmap(dev->buf, dev->size);
+	close(fd);
 
 	return 0;
 }

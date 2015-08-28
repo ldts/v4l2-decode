@@ -26,6 +26,7 @@
 #include <linux/videodev2.h>
 #include "msm-v4l2-controls.h"
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <poll.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -53,12 +54,30 @@
 #define RESULT_EXTRA_BUFFER_CNT 2
 
 static const int event_type[] = {
-	V4L2_EVENT_MSM_VIDC_FLUSH_DONE,
-	V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_SUFFICIENT,
-	V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_INSUFFICIENT,
-	V4L2_EVENT_MSM_VIDC_CLOSE_DONE,
-	V4L2_EVENT_MSM_VIDC_SYS_ERROR
+	V4L2_EVENT_EOS,
+	V4L2_EVENT_SOURCE_CHANGE,
 };
+
+static struct timeval start, end;
+
+static void time_start(void)
+{
+	gettimeofday(&start, NULL);
+}
+
+static void print_time_delta(const char *prefix)
+{
+	unsigned long delta;
+
+	gettimeofday(&end, NULL);
+
+	delta = (end.tv_sec * 1000000 + end.tv_usec) -
+		(start.tv_sec * 1000000 + start.tv_usec);
+
+	delta = delta;
+
+	dbg("%s: %ld\n", prefix, delta);
+}
 
 static int subscribe_for_events(int fd)
 {
@@ -301,6 +320,8 @@ void *main_thread_func(void *args)
 
 			/* capture buffer is ready */
 
+			dbg("dequeuing capture buffer");
+
 			if (i->use_dmabuf)
 				ret = video_dequeue_capture_dmabuf(
 						i, &n, &finished, &bytesused);
@@ -312,7 +333,7 @@ void *main_thread_func(void *args)
 
 			vid->cap_buf_flag[n] = 0;
 
-			info("decoded frame %ld", vid->total_captured);
+			dbg("decoded frame %ld", vid->total_captured);
 
 			if (finished)
 				break;
@@ -321,9 +342,13 @@ void *main_thread_func(void *args)
 
 			disp_idx = i->use_dmabuf ? n : 0;
 
+			time_start();
+
 			drm_display_buf(vid->cap_buf_addr[n][0],
 					&i->disp_buf[disp_idx], bytesused,
 					i->width, i->height);
+
+			print_time_delta("disp");
 
 			save_frame(i, (void *)vid->cap_buf_addr[n][0],
 				   bytesused);
@@ -340,6 +365,8 @@ void *main_thread_func(void *args)
 
 next_event:
 		if (revents & (POLLOUT | POLLWRNORM)) {
+
+			dbg("dequeuing output buffer");
 
 			ret = video_dequeue_output(i, &n);
 			if (ret < 0) {
@@ -399,7 +426,7 @@ int main(int argc, char **argv)
 	ret = video_open(&inst, inst.video.name);
 	if (ret)
 		goto err;
-#if 0
+#if 1
 	/* TODO: */
 	ret = subscribe_for_events(vid->fd);
 	if (ret)
@@ -474,15 +501,18 @@ int main(int argc, char **argv)
 
 	video_stop(&inst);
 
+	info("Total frames captured %ld", vid->total_captured);
+
+	if (inst.use_dmabuf)
+		drm_destroy_bufs(inst.disp_buf, vid->cap_buf_cnt, 0);
+	else
+		drm_destroy_bufs(inst.disp_buf, 1, 1);
+
+	drm_deinit();
+
 	cleanup(&inst);
 
 	pthread_mutex_destroy(&inst.lock);
-
-	info("Total frames captured %ld", vid->total_captured);
-
-	drm_destroy_bufs(inst.disp_buf, 1, 1);
-
-	drm_deinit();
 
 	return 0;
 err:

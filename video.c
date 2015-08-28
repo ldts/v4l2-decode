@@ -347,10 +347,10 @@ int video_stream(struct instance *i, enum v4l2_buf_type type, int status)
 int video_stop(struct instance *i)
 {
 	struct video *vid = &i->video;
-	struct v4l2_requestbuffers reqbuf;
 	struct v4l2_decoder_cmd dec;
 	int ret;
 
+#if 0
 	memzero(dec);
 	dec.cmd = V4L2_DEC_CMD_STOP;
 	ret = ioctl(vid->fd, VIDIOC_DECODER_CMD, &dec);
@@ -358,32 +358,7 @@ int video_stop(struct instance *i)
 		err("DECODER_CMD failed (%s)", strerror(errno));
 		return -1;
 	}
-
-	/* HACK: streamoff failing, so bail out of here */
-	return 0;
-
-	memzero(reqbuf);
-	reqbuf.memory = V4L2_MEMORY_MMAP;
-	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-
-	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
-	if (ret < 0) {
-		err("REQBUFS with count=0 on CAPTURE queue failed (%s)",
-		    strerror(errno));
-		return -1;
-	}
-
-	memzero(reqbuf);
-	reqbuf.memory = V4L2_MEMORY_MMAP;
-	reqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-
-	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
-	if (ret < 0) {
-		err("REQBUFS with count=0 on OUTPUT queue failed (%s)",
-		    strerror(errno));
-		return -1;
-	}
-
+#endif
 	ret = video_stream(i, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
 			   VIDIOC_STREAMOFF);
 	if (ret < 0)
@@ -531,7 +506,7 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 
 	vid->cap_buf_cnt = reqbuf.count;
 
-	dbg("Succesfully requested %d dmabuf CAPTURE buffers", vid->cap_buf_cn);
+	dbg("Succesfully requested %d dmabuf CAPTURE buffers", vid->cap_buf_cnt);
 
 	return 0;
 }

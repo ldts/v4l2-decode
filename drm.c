@@ -12,6 +12,7 @@
 #include <drm_fourcc.h>
 
 #include "drm-funcs.h"
+#include "common.h"
 
 static const char *dri_path = "/dev/dri/card0";
 
@@ -48,7 +49,7 @@ static struct drm_dev *pdev;
 
 static void fatal(char *str)
 {
-	fprintf(stderr, "%s\n", str);
+	err("%s\n", str);
 	exit(EXIT_FAILURE);
 }
 
@@ -56,15 +57,6 @@ static void error(char *str)
 {
 	perror(str);
 	exit(EXIT_FAILURE);
-}
-
-static void *emmap(int addr, size_t len, int prot, int flag, int fd, off_t offset)
-{
-	uint32_t *fp;
-
-	if ((fp = (uint32_t *) mmap(0, len, prot, flag, fd, offset)) == MAP_FAILED)
-		error("mmap");
-	return fp;
 }
 
 static int drm_open(const char *path)
@@ -212,13 +204,8 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 		return -1;
 	}
 
-	printf("bo %u, %ux%u, pitch %u, bpp %u, size %lu (%lu)\n",
-		gem.handle,
-		gem.width, gem.height,
-		gem.pitch,
-		gem.bpp,
-		gem.size,
-		*size);
+	dbg("bo %u, %ux%u, pitch %u, bpp %u, size %lu (%lu)\n", gem.handle,
+	    gem.width, gem.height, gem.pitch, gem.bpp, gem.size, *size);
 
 	b->bo_handle = gem.handle;
 	*size = gem.size;
@@ -233,7 +220,7 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 		goto fail_gem;
 	}
 
-	printf("dbuf_fd = %d\n", prime.fd);
+	dbg("dbuf_fd = %d\n", prime.fd);
 
 	b->dbuf_fd = prime.fd;
 
@@ -248,9 +235,9 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 
 	offsets[0] = 0;
 	handles[0] = b->bo_handle;
-	pitches[0] = stride;/*gem.pitch;*/
+	pitches[0] = stride;
 
-	offsets[1] = stride * y_scanlines;/*pitches[0] * dev->height;*/
+	offsets[1] = stride * y_scanlines;
 	handles[1] = b->bo_handle;
 	pitches[1] = pitches[0];
 
@@ -275,6 +262,17 @@ fail_gem:
 		fprintf(stderr, "DESTROY_DUMB failed: %s\n", strerror(errno));
 
 	return -1;
+}
+
+#if 0
+
+static void *emmap(int addr, size_t len, int prot, int flag, int fd, off_t offset)
+{
+	uint32_t *fp;
+
+	if ((fp = (uint32_t *) mmap(0, len, prot, flag, fd, offset)) == MAP_FAILED)
+		error("mmap");
+	return fp;
 }
 
 static void drm_setup_fb(int fd, struct drm_dev *dev)
@@ -314,6 +312,7 @@ static void drm_setup_fb(int fd, struct drm_dev *dev)
 			   1, &dev->mode))
 		fatal("drmModeSetCrtc() failed");
 }
+#endif
 
 static void drm_destroy(int fd, struct drm_dev *dev_head)
 {

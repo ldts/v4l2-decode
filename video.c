@@ -523,16 +523,18 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	int n;
 
 	memzero(try_fmt);
-	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	fmt.fmt.pix_mp.pixelformat = codec;
+	try_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+	try_fmt.fmt.pix_mp.width = i->width;
+	try_fmt.fmt.pix_mp.height = i->height;
+	try_fmt.fmt.pix_mp.pixelformat = codec;
 
-	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &fmt);
+	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &try_fmt);
 	if (ret) {
 		err("Failed to try format on OUTPUT (%s)", strerror(errno));
 	}
 
 	dbg("Try OUTPUT format sizeimage=%u",
-	    fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 
 	memzero(fmt);
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;

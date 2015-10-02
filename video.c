@@ -515,7 +515,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 		       unsigned int size, int count)
 {
 	struct video *vid = &i->video;
-	struct v4l2_format fmt, try_fmt;
+	struct v4l2_format fmt, try_fmt, g_fmt;
 	struct v4l2_requestbuffers reqbuf;
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[OUT_PLANES];
@@ -552,6 +552,18 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	    fmt.fmt.pix_mp.plane_fmt[0].sizeimage, size);
 
 	vid->out_buf_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
+
+	memzero(g_fmt);
+	g_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	g_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
+
+	ret = ioctl(vid->fd, VIDIOC_G_FMT, &g_fmt);
+	if (ret) {
+		err("Failed to get format on OUTPUT (%s)", strerror(errno));
+	} else {
+		err("Get format sizeimage is %d",
+			g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+	}
 
 	memzero(reqbuf);
 	reqbuf.count = count;

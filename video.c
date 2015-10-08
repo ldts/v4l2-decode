@@ -414,9 +414,8 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 	vid->cap_buf_cnt_min = 1;
 	vid->cap_buf_queued = 0;
 
-	dbg("video decoder buffer parameters: %dx%d plane[0]=%d plane[1]=%d",
-	    fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
-	    vid->cap_buf_size[0], vid->cap_buf_size[1]);
+	info("Setup decoding CAPTURE buffer size=%u (%u)",
+	     vid->cap_buf_size[0], vid->cap_buf_size[1]);
 
 	memzero(reqbuf);
 	reqbuf.count = vid->cap_buf_cnt;
@@ -429,8 +428,8 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 		return -1;
 	}
 
-	info("Number of CAPTURE buffers is %d (requested %d, extra %d)",
-		reqbuf.count, vid->cap_buf_cnt, 0);
+	info("Number of CAPTURE buffers is %d (requested %d)",
+		reqbuf.count, vid->cap_buf_cnt);
 
 	vid->cap_buf_cnt = reqbuf.count;
 
@@ -466,8 +465,6 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 		vid->cap_buf_size[0] = buf.m.planes[0].length;
 	}
 
-	dbg("Succesfully mmapped %d CAPTURE buffers", n);
-
 	return 0;
 }
 
@@ -498,9 +495,8 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 	vid->cap_buf_cnt_min = 1;
 	vid->cap_buf_queued = 0;
 
-	dbg("video decoder buffer parameters: %dx%d plane[0]=%d plane[1]=%d",
-	    fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
-	    vid->cap_buf_size[0], vid->cap_buf_size[1]);
+	info("Setup decoding CAPTURE buffer size=%u (%u)",
+	     vid->cap_buf_size[0], vid->cap_buf_size[1]);
 
 	memzero(reqbuf);
 	reqbuf.count = vid->cap_buf_cnt;
@@ -513,12 +509,10 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 		return -1;
 	}
 
-	info("Number of CAPTURE buffers is %d (requested %d, extra %d)",
-		reqbuf.count, vid->cap_buf_cnt, 0);
+	info("Number of CAPTURE buffers is %d (requested %d)",
+		reqbuf.count, vid->cap_buf_cnt);
 
 	vid->cap_buf_cnt = reqbuf.count;
-
-	dbg("Succesfully requested %d dmabuf CAPTURE buffers", vid->cap_buf_cnt);
 
 	return 0;
 }
@@ -560,8 +554,8 @@ int video_setup_output(struct instance *i, unsigned long codec,
 		return -1;
 	}
 
-	dbg("Setup decoding OUTPUT buffer size=%u (requested=%u)",
-	    fmt.fmt.pix_mp.plane_fmt[0].sizeimage, size);
+	info("Setup decoding OUTPUT buffer size=%u",
+	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 
 	vid->out_buf_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 
@@ -573,8 +567,8 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	if (ret) {
 		err("Failed to get format on OUTPUT (%s)", strerror(errno));
 	} else {
-		err("Get format sizeimage is %d",
-			g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+		info("Get format sizeimage is %d",
+		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 	}
 
 	memzero(reqbuf);
@@ -590,8 +584,8 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 	vid->out_buf_cnt = reqbuf.count;
 
-	dbg("Number of video decoder OUTPUT buffers is %d (requested %d)",
-	    vid->out_buf_cnt, count);
+	info("Number of OUTPUT buffers is %d (requested %d)",
+	     vid->out_buf_cnt, count);
 
 	for (n = 0; n < vid->out_buf_cnt; n++) {
 		memzero(buf);
@@ -624,8 +618,5 @@ int video_setup_output(struct instance *i, unsigned long codec,
 		vid->out_buf_flag[n] = 0;
 	}
 
-	dbg("Succesfully mmapped %d OUTPUT buffers", n);
-
 	return 0;
 }
-

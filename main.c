@@ -449,6 +449,10 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
+	ret = video_set_framerate(&inst, 30);
+	if (ret)
+		goto err;
+
 	if (inst.use_dmabuf)
 		ret = drm_create_bufs(&inst.disp_buf[0], vid->cap_buf_cnt,
 				      inst.width, inst.height, 0);

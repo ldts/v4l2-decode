@@ -66,6 +66,7 @@ int video_dequeue_capture_dmabuf(struct instance *i, int *n, int *finished,
 				 unsigned int *bytesused);
 
 int video_set_control(struct instance *i);
+int video_set_framerate(struct instance *i, unsigned int framerate);
 
 int video_stop(struct instance *i);
 

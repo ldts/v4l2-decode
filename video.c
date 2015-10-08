@@ -86,6 +86,17 @@ int video_set_control(struct instance *i)
 	return ret;
 }
 
+int video_set_framerate(struct instance *i, unsigned int framerate)
+{
+	struct v4l2_streamparm parm = {0};
+
+	parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	parm.parm.output.timeperframe.numerator = 1;
+	parm.parm.output.timeperframe.denominator = framerate;
+
+	return ioctl(i->video.fd, VIDIOC_S_PARM, &parm);
+}
+
 int video_export_buf(struct instance *i, int index)
 {
 	struct video *vid = &i->video;
@@ -346,11 +357,12 @@ int video_stream(struct instance *i, enum v4l2_buf_type type, int status)
 
 int video_stop(struct instance *i)
 {
-	struct video *vid = &i->video;
-	struct v4l2_decoder_cmd dec;
 	int ret;
 
 #if 0
+	struct video *vid = &i->video;
+	struct v4l2_decoder_cmd dec;
+
 	memzero(dec);
 	dec.cmd = V4L2_DEC_CMD_STOP;
 	ret = ioctl(vid->fd, VIDIOC_DECODER_CMD, &dec);

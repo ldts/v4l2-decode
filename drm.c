@@ -226,7 +226,7 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 
 	uint32_t stride = ALIGN(width, 128);
 	uint32_t y_scanlines = ALIGN(height, 32);
-	uint32_t uv_scanlines = ALIGN(height / 2, 16);
+/*	uint32_t uv_scanlines = ALIGN(height / 2, 16);*/
 
 	uint32_t offsets[4] = { 0 };
 	uint32_t pitches[4] = { 0 };
@@ -312,7 +312,6 @@ static void drm_setup_fb(int fd, struct drm_dev *dev)
 			   1, &dev->mode))
 		fatal("drmModeSetCrtc() failed");
 }
-#endif
 
 static void drm_destroy(int fd, struct drm_dev *dev_head)
 {
@@ -344,6 +343,7 @@ static void drm_destroy(int fd, struct drm_dev *dev_head)
 
 	close(fd);
 }
+#endif
 
 static int find_plane(int fd, uint32_t *plane_id, uint32_t crtc_id)
 {
@@ -395,6 +395,7 @@ static int find_plane(int fd, uint32_t *plane_id, uint32_t crtc_id)
 	return ret;
 }
 
+#if 0
 static int display_file(struct drm_dev *dev)
 {
 	struct drm_buffer *buffer = &dev->buffers[0];
@@ -472,6 +473,7 @@ err_close:
 
 	return -1;
 }
+#endif
 
 int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
 		    unsigned int width, unsigned int height, int mmaped)

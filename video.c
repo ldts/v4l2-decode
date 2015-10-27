@@ -387,13 +387,27 @@ int video_stop(struct instance *i)
 int video_setup_capture(struct instance *i, int count, int w, int h)
 {
 	struct video *vid = &i->video;
-	struct v4l2_format fmt;
+	struct v4l2_format fmt, try_fmt;
 	struct v4l2_requestbuffers reqbuf;
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[CAP_PLANES];
 	int ret;
 	int n;
+#if 0
+	memzero(try_fmt);
+	try_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	try_fmt.fmt.pix_mp.width = i->width;
+	try_fmt.fmt.pix_mp.height = i->height;
+	try_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
 
+	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &try_fmt);
+	if (ret) {
+		err("Failed to try format on CAPTURE (%s)", strerror(errno));
+	}
+
+	info("Try CAPTURE format sizeimage=%u",
+	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+#endif
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	fmt.fmt.pix_mp.height = h;
 	fmt.fmt.pix_mp.width = w;
@@ -465,6 +479,8 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 		vid->cap_buf_size[0] = buf.m.planes[0].length;
 	}
 
+	info("querybuf: CAPTURE sizeimage %d", vid->cap_buf_size[0]);
+
 	return 0;
 }
 
@@ -527,7 +543,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	struct v4l2_plane planes[OUT_PLANES];
 	int ret;
 	int n;
-
+#if 0
 	memzero(try_fmt);
 	try_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	try_fmt.fmt.pix_mp.width = i->width;
@@ -539,9 +555,9 @@ int video_setup_output(struct instance *i, unsigned long codec,
 		err("Failed to try format on OUTPUT (%s)", strerror(errno));
 	}
 
-	dbg("Try OUTPUT format sizeimage=%u",
+	info("Try OUTPUT format sizeimage=%u",
 	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
-
+#endif
 	memzero(fmt);
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	fmt.fmt.pix_mp.width = i->width;
@@ -558,7 +574,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 
 	vid->out_buf_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
-
+#if 0
 	memzero(g_fmt);
 	g_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	g_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
@@ -570,7 +586,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 		info("Get format sizeimage is %d",
 		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 	}
-
+#endif
 	memzero(reqbuf);
 	reqbuf.count = count;
 	reqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -578,7 +594,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
 	if (ret) {
-		err("REQBUFS failed on OUTPUT queue");
+		err("REQBUFS failed on OUTPUT queue (%s)", strerror(errno));
 		return -1;
 	}
 
@@ -617,6 +633,8 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 		vid->out_buf_flag[n] = 0;
 	}
+
+	info("querybuf: OUTPUT sizeimage %d", vid->out_buf_size);
 
 	return 0;
 }

@@ -26,7 +26,7 @@ AR = "${TCPATH}ar rc"
 AR2 = ${TCPATH}ranlib make -j4
 
 
-INCLUDES = -I$(KERNELHEADERS) -I/usr/include/drm
+INCLUDES = -I$(KERNELHEADERS) -I/usr/include/libdrm
 
 #INCLUDES = -I$(KERNELHEADERS)/include
 

@@ -52,8 +52,19 @@
  * This is the number of buffers that the application can keep
  * used and still enable video device to decode with the hardware. */
 #define RESULT_EXTRA_BUFFER_CNT 2
-
-static const int event_type[] = {
+#if 0
+struct v4l2_ops {
+	int (*setup_cap)(struct instance *i, int count, int w, int h);
+	int (*setup_out)(struct instance *i, unsigned long codec,
+			 unsigned int size, int count);
+	int (*dqbuf_cap)(struct instance *i, int *n, int *finished,
+			 unsigned int *bytesused);
+	int (*qbuf_cap)(struct instance *i, int index, struct drm_buffer *b);
+	int (*dqbuf_out)(struct instance *i, int *n);
+	int (*qbuf_out)(struct instance *i, int n, int length);
+};
+#endif
+static const unsigned int event_types[] = {
 	V4L2_EVENT_EOS,
 	V4L2_EVENT_SOURCE_CHANGE,
 };
@@ -81,13 +92,13 @@ static void print_time_delta(const char *prefix)
 
 static int subscribe_for_events(int fd)
 {
-	int size_event = sizeof(event_type) / sizeof(event_type[0]);
+	int size_event = sizeof(event_types) / sizeof(event_types[0]);
 	struct v4l2_event_subscription sub;
 	int i, ret;
 
 	for (i = 0; i < size_event; i++) {
 		memset(&sub, 0, sizeof(sub));
-		sub.type = event_type[i];
+		sub.type = event_types[i];
 		ret = ioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub);
 		if (ret < 0)
 			err("cannot subscribe for event type %d (%s)",
@@ -110,23 +121,14 @@ static int handle_v4l_events(struct video *vid)
 	}
 
 	switch (event.type) {
-	case V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_INSUFFICIENT:
-		dbg("Port Reconfig recieved insufficient\n");
+	case V4L2_EVENT_EOS:
+		info("EOS reached");
 		break;
-	case V4L2_EVENT_MSM_VIDC_PORT_SETTINGS_CHANGED_SUFFICIENT:
-		dbg("Setting changed sufficient\n");
-		break;
-	case V4L2_EVENT_MSM_VIDC_FLUSH_DONE:
-		dbg("Flush Done Recieved \n");
-		break;
-	case V4L2_EVENT_MSM_VIDC_CLOSE_DONE:
-		dbg("Close Done Recieved \n");
-		break;
-	case V4L2_EVENT_MSM_VIDC_SYS_ERROR:
-		dbg("SYS Error Recieved \n");
+	case V4L2_EVENT_SOURCE_CHANGE:
+		info("Source changed");
 		break;
 	default:
-		dbg("unknown event type occurred %x\n", event.type);
+		dbg("unknown event type occurred %x", event.type);
 		break;
 	}
 
@@ -315,6 +317,9 @@ void *main_thread_func(void *args)
 
 		revents = pfd.revents;
 
+		if (revents & POLLPRI)
+			handle_v4l_events(vid);
+
 		if (revents & (POLLIN | POLLRDNORM)) {
 			unsigned int bytesused;
 
@@ -368,6 +373,9 @@ next_event:
 
 			dbg("dequeuing output buffer");
 
+			if (i->parser.finished)
+				continue;
+
 			ret = video_dequeue_output(i, &n);
 			if (ret < 0) {
 				err("dequeue output buffer fail");
@@ -378,11 +386,6 @@ next_event:
 			}
 
 			dbg("dequeued output buffer %d", n);
-		}
-
-		if (revents & POLLPRI) {
-			dbg("v4l2 event");
-			handle_v4l_events(vid);
 		}
 	}
 

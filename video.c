@@ -33,6 +33,9 @@
 
 #include "common.h"
 
+/* mem2mem encoder/decoder */
+#define V4L2_BUF_FLAG_LAST			0x00100000
+
 static char *dbg_type[2] = {"OUTPUT", "CAPTURE"};
 static char *dbg_status[2] = {"ON", "OFF"};
 
@@ -82,6 +85,8 @@ int video_set_control(struct instance *i)
 	control.value = 1;
 
 	ret = ioctl(i->video.fd, VIDIOC_S_CTRL, &control);
+	if (ret < 0)
+		err("setting cont data transfer (%s)", strerror(errno));
 
 	return ret;
 }
@@ -151,8 +156,10 @@ static int video_queue_buf(struct instance *i, int index, int l1, int l2,
 		buf.m.planes[0].length = vid->cap_buf_size[0];
 	} else {
 		buf.m.planes[0].length = vid->out_buf_size;
-		if (l1 == 0)
-			buf.flags |= V4L2_QCOM_BUF_FLAG_EOS;
+		if (l1 == 0) {
+			buf.m.planes[0].bytesused = 1;
+			buf.flags |= V4L2_BUF_FLAG_LAST;
+		}
 	}
 
 	ret = ioctl(vid->fd, VIDIOC_QBUF, &buf);
@@ -300,6 +307,7 @@ int video_dequeue_capture(struct instance *i, int *n, int *finished,
 	*finished = 0;
 
 	if (buf.flags & V4L2_QCOM_BUF_FLAG_EOS ||
+	    buf.flags & V4L2_BUF_FLAG_LAST ||
 	    buf.m.planes[0].bytesused == 0)
 		*finished = 1;
 
@@ -357,10 +365,11 @@ int video_stream(struct instance *i, enum v4l2_buf_type type, int status)
 
 int video_stop(struct instance *i)
 {
+	struct video *vid = &i->video;
+	struct v4l2_requestbuffers reqbuf;
 	int ret;
 
 #if 0
-	struct video *vid = &i->video;
 	struct v4l2_decoder_cmd dec;
 
 	memzero(dec);
@@ -380,6 +389,23 @@ int video_stop(struct instance *i)
 			   VIDIOC_STREAMOFF);
 	if (ret < 0)
 		err("STREAMOFF OUTPUT queue failed (%s)", strerror(errno));
+
+	memzero(reqbuf);
+	reqbuf.count = 0;
+	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	reqbuf.memory = V4L2_MEMORY_MMAP;
+
+	info("calling reqbuf(0)");
+
+	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
+	if (ret < 0)
+		err("REQBUFS(0) on CAPTURE queue (%s)", strerror(errno));
+
+	reqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+
+	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
+	if (ret < 0)
+		err("REQBUFS(0) on OUTPUT queue (%s)", strerror(errno));
 
 	return 0;
 }

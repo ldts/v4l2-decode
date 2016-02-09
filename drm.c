@@ -191,12 +191,15 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 
 	/* for NV12 virtual height = height * 3 / 2 */
 	virtual_height = dev->height * 3 / 2;
+	virtual_height = ALIGN(dev->height, 32) * 3 / 2;
+
+	info("dev: %dx%d, virtual_height:%d", dev->width, dev->height,
+		virtual_height);
 
 	memset(&gem, 0, sizeof gem);
 	gem.width = dev->width;
 	gem.height = virtual_height;
 	gem.bpp = 8;	/* for NV12 bpp is 8 */
-	gem.size = *size;
 
 	ret = drmIoctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &gem);
 	if (ret) {
@@ -204,8 +207,8 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 		return -1;
 	}
 
-	dbg("bo %u, %ux%u, pitch %u, bpp %u, size %lu (%lu)\n", gem.handle,
-	    gem.width, gem.height, gem.pitch, gem.bpp, gem.size, *size);
+	info("bo %u, %ux%u, pitch %u, bpp %u, size %lu (%lu)", gem.handle,
+	     gem.width, gem.height, gem.pitch, gem.bpp, gem.size, *size);
 
 	b->bo_handle = gem.handle;
 	*size = gem.size;
@@ -244,7 +247,8 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 	ret = drmModeAddFB2(fd, width, height, fourcc, handles,
 			    pitches, offsets, &b->fb_handle, 0);
 	if (ret) {
-		fprintf(stderr, "drmModeAddFB2 failed: %s\n", strerror(errno));
+		fprintf(stderr, "drmModeAddFB2 failed: %d (%s)\n", ret,
+			strerror(errno));
 		goto fail_prime;
 	}
 

@@ -419,11 +419,11 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 	struct v4l2_plane planes[CAP_PLANES];
 	int ret;
 	int n;
-#if 0
+#if 1
 	memzero(try_fmt);
 	try_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-	try_fmt.fmt.pix_mp.width = i->width;
-	try_fmt.fmt.pix_mp.height = i->height;
+	try_fmt.fmt.pix_mp.width = w;
+	try_fmt.fmt.pix_mp.height = h;
 	try_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
 
 	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &try_fmt);
@@ -434,6 +434,7 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 	info("Try CAPTURE format sizeimage=%u",
 	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 #endif
+	memzero(fmt);
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	fmt.fmt.pix_mp.height = h;
 	fmt.fmt.pix_mp.width = w;
@@ -569,7 +570,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	struct v4l2_plane planes[OUT_PLANES];
 	int ret;
 	int n;
-#if 0
+#if 1
 	memzero(try_fmt);
 	try_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	try_fmt.fmt.pix_mp.width = i->width;
@@ -600,16 +601,16 @@ int video_setup_output(struct instance *i, unsigned long codec,
 	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 
 	vid->out_buf_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
-#if 0
+#if 1
 	memzero(g_fmt);
-	g_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	g_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	g_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
 
 	ret = ioctl(vid->fd, VIDIOC_G_FMT, &g_fmt);
 	if (ret) {
 		err("Failed to get format on OUTPUT (%s)", strerror(errno));
 	} else {
-		info("Get format sizeimage is %d",
+		info("Get OUTPUT format sizeimage is %d",
 		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
 	}
 #endif

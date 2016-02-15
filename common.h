@@ -104,26 +104,26 @@ struct video {
 	int fd;
 
 	/* Output queue related */
-	int out_buf_cnt;
-	int out_buf_size;
-	int out_buf_off[MAX_OUT_BUF];
+	unsigned int out_buf_cnt;
+	unsigned int out_buf_size;
+	unsigned int out_buf_off[MAX_OUT_BUF];
 	char *out_buf_addr[MAX_OUT_BUF];
-	int out_buf_flag[MAX_OUT_BUF];
+	unsigned int out_buf_flag[MAX_OUT_BUF];
 
 	/* Capture queue related */
-	int cap_w;
-	int cap_h;
-	int cap_crop_w;
-	int cap_crop_h;
-	int cap_crop_left;
-	int cap_crop_top;
-	int cap_buf_cnt;
-	int cap_buf_cnt_min;
-	int cap_buf_size[CAP_PLANES];
-	int cap_buf_off[MAX_CAP_BUF][CAP_PLANES];
+	unsigned int cap_w;
+	unsigned int cap_h;
+	unsigned int cap_crop_w;
+	unsigned int cap_crop_h;
+	unsigned int cap_crop_left;
+	unsigned int cap_crop_top;
+	unsigned int cap_buf_cnt;
+	unsigned int cap_buf_cnt_min;
+	unsigned int cap_buf_size[CAP_PLANES];
+	unsigned int cap_buf_off[MAX_CAP_BUF][CAP_PLANES];
 	char *cap_buf_addr[MAX_CAP_BUF][CAP_PLANES];
-	int cap_buf_flag[MAX_CAP_BUF];
-	int cap_buf_queued;
+	unsigned int cap_buf_flag[MAX_CAP_BUF];
+	unsigned int cap_buf_queued;
 
 	unsigned long total_captured;
 };

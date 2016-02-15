@@ -113,17 +113,15 @@ static struct drm_dev *drm_find_dev(int fd)
 		conn = drmModeGetConnector(fd, res->connectors[i]);
 
 		if (conn) {
-			printf("connector: ");
-
-			if (conn->connection == DRM_MODE_CONNECTED)
-				printf("connected");
-			else if (conn->connection == DRM_MODE_DISCONNECTED)
-				printf("disconnected");
-			else if (conn->connection == DRM_MODE_UNKNOWNCONNECTION)
-				printf("unknownconnection");
-			else
-				printf("unknown");
-			printf("\n");
+			if (conn->connection == DRM_MODE_CONNECTED) {
+				dbg("drm: connector: connected");
+			} else if (conn->connection == DRM_MODE_DISCONNECTED) {
+				dbg("drm: connector: disconnected");
+			} else if (conn->connection == DRM_MODE_UNKNOWNCONNECTION) {
+				dbg("drm: connector: unknownconnection");
+			} else {
+				dbg("drm: connector: unknown");
+			}
 		}
 
 		if (conn != NULL && conn->connection == DRM_MODE_CONNECTED
@@ -193,8 +191,8 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 	virtual_height = dev->height * 3 / 2;
 	virtual_height = ALIGN(dev->height, 32) * 3 / 2;
 
-	info("dev: %dx%d, virtual_height:%d", dev->width, dev->height,
-		virtual_height);
+	info("drm bo: %dx%d, virtual_height:%d", dev->width, dev->height,
+	     virtual_height);
 
 	memset(&gem, 0, sizeof gem);
 	gem.width = dev->width;
@@ -207,7 +205,7 @@ static int buffer_create(int fd, struct drm_buffer *b, struct drm_dev *dev,
 		return -1;
 	}
 
-	info("bo %u, %ux%u, pitch %u, bpp %u, size %lu (%lu)", gem.handle,
+	info("drm bo: %u, %ux%u, pitch %u, bpp %u, size %llu (%lu)", gem.handle,
 	     gem.width, gem.height, gem.pitch, gem.bpp, gem.size, *size);
 
 	b->bo_handle = gem.handle;
@@ -362,7 +360,7 @@ static int find_plane(int fd, uint32_t *plane_id, uint32_t crtc_id)
 	if (!planes)
 		error("drmModeGetPlaneResources failed\n");
 
-	printf("%s: count_planes: %u\n", __func__, planes->count_planes);
+	info("drm: found planes %u", planes->count_planes);
 
 	for (i = 0; i < planes->count_planes; ++i) {
 		plane = drmModeGetPlane(fd, planes->planes[i]);
@@ -560,13 +558,13 @@ int drm_init(void)
 		goto err;
 	}
 
-	printf("available connector(s)\n\n");
+	dbg("available connector(s)");
 
 	for (dev = dev_head; dev != NULL; dev = dev->next) {
-		printf("connector id:%d\n", dev->conn_id);
-		printf("\tencoder id:%d crtc id:%d fb id:%d\n", dev->enc_id,
-			dev->crtc_id, dev->fb_id);
-		printf("\twidth:%d height:%d\n", dev->width, dev->height);
+		dbg("connector id:%d", dev->conn_id);
+		dbg("\tencoder id:%d crtc id:%d fb id:%d", dev->enc_id,
+		    dev->crtc_id, dev->fb_id);
+		dbg("\twidth:%d height:%d", dev->width, dev->height);
 	}
 
 	/* FIXME: use first drm_dev */
@@ -580,7 +578,7 @@ int drm_init(void)
 		goto err;
 	}
 
-	printf("Found NV12 plane_id: %x\n", dev->plane_id);
+	info("drm: Found NV12 plane_id: %x", dev->plane_id);
 
 	return 0;
 

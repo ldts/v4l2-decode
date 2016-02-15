@@ -293,11 +293,12 @@ void *parser_thread_func(void *args)
 
 void *main_thread_func(void *args)
 {
-	struct instance *i = (struct instance *)args;
+	struct instance *i = args;
 	struct video *vid = &i->video;
 	struct pollfd pfd;
 	short revents;
-	int ret, n, finished, disp_idx;
+	unsigned int n, finished, disp_idx;
+	int ret;
 
 	dbg("main thread started");
 

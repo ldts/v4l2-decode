@@ -102,12 +102,12 @@ int video_set_framerate(struct instance *i, unsigned int framerate)
 	return ioctl(i->video.fd, VIDIOC_S_PARM, &parm);
 }
 
-int video_export_buf(struct instance *i, int index)
+int video_export_buf(struct instance *i, unsigned int index)
 {
 	struct video *vid = &i->video;
 	struct v4l2_exportbuffer expbuf;
-	int num_planes = CAP_PLANES;
-	int n;
+	unsigned int num_planes = CAP_PLANES;
+	unsigned int n;
 
 	for (n = 0; n < num_planes; n++) {
 		memset(&expbuf, 0, sizeof(expbuf));
@@ -118,20 +118,21 @@ int video_export_buf(struct instance *i, int index)
 		expbuf.plane = n;
 
 		if (ioctl(vid->fd, VIDIOC_EXPBUF, &expbuf) < 0) {
-			err("Failed to export CAPTURE buffer index%d (%s)",
+			err("Failed to export CAPTURE buffer index%u (%s)",
 			    index, strerror(errno));
 			return -1;
 		}
 
-		info("Exported CAPTURE buffer index%d (plane%d) with fd %d",
+		info("Exported CAPTURE buffer index%d (plane%u) with fd %d",
 		     index, n, expbuf.fd);
 	}
 
 	return 0;
 }
 
-static int video_queue_buf(struct instance *i, int index, int l1, int l2,
-			   int type, int nplanes)
+static int video_queue_buf(struct instance *i, unsigned int index,
+			   unsigned int l1, unsigned int l2,
+			   unsigned int type, unsigned int nplanes)
 {
 	struct video *vid = &i->video;
 	struct v4l2_buffer buf;
@@ -164,20 +165,20 @@ static int video_queue_buf(struct instance *i, int index, int l1, int l2,
 
 	ret = ioctl(vid->fd, VIDIOC_QBUF, &buf);
 	if (ret) {
-		err("Failed to queue buffer (index=%d) on %s (%s)",
+		err("QBUF: Failed to queue buffer (index=%u) on %s (%s)",
 		    buf.index,
 		    dbg_type[type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE],
 		    strerror(errno));
 		return -1;
 	}
 
-	dbg("  Queued buffer on %s queue with index %d",
+	dbg("QBUF: buffer on %s queue with index %u",
 	    dbg_type[type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE], buf.index);
 
 	return 0;
 }
 
-int video_queue_buf_out(struct instance *i, int n, int length)
+int video_queue_buf_out(struct instance *i, unsigned int n, unsigned int length)
 {
 	struct video *vid = &i->video;
 
@@ -191,7 +192,7 @@ int video_queue_buf_out(struct instance *i, int n, int length)
 			       OUT_PLANES);
 }
 
-int video_queue_buf_cap(struct instance *i, int index)
+int video_queue_buf_cap(struct instance *i, unsigned int index)
 {
 	struct video *vid = &i->video;
 
@@ -206,7 +207,7 @@ int video_queue_buf_cap(struct instance *i, int index)
 			       CAP_PLANES);
 }
 
-int video_queue_buf_cap_dmabuf(struct instance *i, int index,
+int video_queue_buf_cap_dmabuf(struct instance *i, unsigned int index,
 			       struct drm_buffer *b)
 {
 	struct video *vid = &i->video;
@@ -239,12 +240,12 @@ int video_queue_buf_cap_dmabuf(struct instance *i, int index,
 
 	ret = ioctl(vid->fd, VIDIOC_QBUF, &buf);
 	if (ret) {
-		err("Failed to queue buffer (index=%d) on CAPTURE (%s)",
+		err("QBUF: Failed to queue buffer (index=%u) on CAPTURE (%s)",
 		    buf.index, strerror(errno));
 		return -1;
 	}
 
-	dbg("  Queued buffer on %s queue with index %d",
+	dbg("  QBUF: Queued buffer on %s queue with index %u",
 	    dbg_type[1], buf.index);
 
 	return 0;
@@ -261,14 +262,14 @@ static int video_dequeue_buf(struct instance *i, struct v4l2_buffer *buf)
 		return -errno;
 	}
 
-	dbg("Dequeued buffer on %s queue with index %d (flags:%x, bytesused:%d)",
+	dbg("Dequeued buffer on %s queue with index %u (flags:%x, bytesused:%u)",
 	    dbg_type[buf->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE],
 	    buf->index, buf->flags, buf->m.planes[0].bytesused);
 
 	return 0;
 }
 
-int video_dequeue_output(struct instance *i, int *n)
+int video_dequeue_output(struct instance *i, unsigned int *n)
 {
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[OUT_PLANES];
@@ -289,8 +290,8 @@ int video_dequeue_output(struct instance *i, int *n)
 	return 0;
 }
 
-int video_dequeue_capture(struct instance *i, int *n, int *finished,
-			  unsigned int *bytesused)
+int video_dequeue_capture(struct instance *i, unsigned int *n,
+			  unsigned int *finished, unsigned int *bytesused)
 {
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[CAP_PLANES];
@@ -317,7 +318,8 @@ int video_dequeue_capture(struct instance *i, int *n, int *finished,
 	return 0;
 }
 
-int video_dequeue_capture_dmabuf(struct instance *i, int *n, int *finished,
+int video_dequeue_capture_dmabuf(struct instance *i, unsigned int *n,
+				 unsigned int *finished,
 				 unsigned int *bytesused)
 {
 	struct v4l2_buffer buf;
@@ -344,7 +346,7 @@ int video_dequeue_capture_dmabuf(struct instance *i, int *n, int *finished,
 	return 0;
 }
 
-int video_stream(struct instance *i, enum v4l2_buf_type type, int status)
+int video_stream(struct instance *i, enum v4l2_buf_type type, unsigned int status)
 {
 	struct video *vid = &i->video;
 	int ret;
@@ -410,10 +412,11 @@ int video_stop(struct instance *i)
 	return 0;
 }
 
-int video_setup_capture(struct instance *i, int count, int w, int h)
+int video_setup_capture(struct instance *i, unsigned int count, unsigned int w,
+			unsigned int h)
 {
 	struct video *vid = &i->video;
-	struct v4l2_format fmt, try_fmt;
+	struct v4l2_format fmt, try_fmt, g_fmt;
 	struct v4l2_requestbuffers reqbuf;
 	struct v4l2_buffer buf;
 	struct v4l2_plane planes[CAP_PLANES];
@@ -428,11 +431,13 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 
 	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &try_fmt);
 	if (ret) {
-		err("Failed to try format on CAPTURE (%s)", strerror(errno));
+		err("CAPTURE: Failed to try format (%s)", strerror(errno));
 	}
 
-	info("Try CAPTURE format sizeimage=%u",
-	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+	info("CAPTURE: Try format %ux%u sizeimage %u, bpl %u",
+	    try_fmt.fmt.pix_mp.width, try_fmt.fmt.pix_mp.height,
+	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+	    try_fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 #endif
 	memzero(fmt);
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -441,7 +446,7 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 	fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
 	ret = ioctl(vid->fd, VIDIOC_S_FMT, &fmt);
 	if (ret) {
-		err("Failed to set format (%dx%d)", w, h);
+		err("CAPTURE: Failed to set format (%s)", strerror(errno));
 		return -1;
 	}
 
@@ -455,8 +460,26 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 	vid->cap_buf_cnt_min = 1;
 	vid->cap_buf_queued = 0;
 
-	info("Setup decoding CAPTURE buffer size=%u (%u)",
-	     vid->cap_buf_size[0], vid->cap_buf_size[1]);
+	info("CAPTURE: Set format %ux%d sizeimage %u, bpl %u",
+	     fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
+	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+	     fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
+
+#if 1
+	memzero(g_fmt);
+	g_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	g_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
+
+	ret = ioctl(vid->fd, VIDIOC_G_FMT, &g_fmt);
+	if (ret) {
+		err("CAPTURE: Failed to get format (%s)", strerror(errno));
+	} else {
+		info("CAPTURE: Get format %ux%u sizeimage %u, bpl %u",
+		     g_fmt.fmt.pix_mp.width, g_fmt.fmt.pix_mp.height,
+		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+		     g_fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
+	}
+#endif
 
 	memzero(reqbuf);
 	reqbuf.count = vid->cap_buf_cnt;
@@ -465,11 +488,11 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 
 	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
 	if (ret != 0) {
-		err("REQBUFS failed on CAPTURE queue (%s)", strerror(errno));
+		err("CAPTURE: REQBUFS failed (%s)", strerror(errno));
 		return -1;
 	}
 
-	info("Number of CAPTURE buffers is %d (requested %d)",
+	info("CAPTURE: Number of buffers is %u (requested %u)",
 		reqbuf.count, vid->cap_buf_cnt);
 
 	vid->cap_buf_cnt = reqbuf.count;
@@ -485,8 +508,7 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 
 		ret = ioctl(vid->fd, VIDIOC_QUERYBUF, &buf);
 		if (ret != 0) {
-			err("QUERYBUF failed on CAPTURE queue (%s)",
-			    strerror(errno));
+			err("CAPTURE: QUERYBUF failed (%s)", strerror(errno));
 			return -1;
 		}
 
@@ -499,19 +521,20 @@ int video_setup_capture(struct instance *i, int count, int w, int h)
 					       buf.m.planes[0].m.mem_offset);
 
 		if (vid->cap_buf_addr[n][0] == MAP_FAILED) {
-			err("Failed to MMAP CAPTURE buffer on plane0");
+			err("CAPTURE: Failed to MMAP buffer");
 			return -1;
 		}
 
 		vid->cap_buf_size[0] = buf.m.planes[0].length;
 	}
 
-	info("querybuf: CAPTURE sizeimage %d", vid->cap_buf_size[0]);
+	info("CAPTURE: querybuf: sizeimage %u", vid->cap_buf_size[0]);
 
 	return 0;
 }
 
-int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
+int video_setup_capture_dmabuf(struct instance *i, unsigned int count,
+			       unsigned int w, unsigned int h)
 {
 	struct video *vid = &i->video;
 	struct v4l2_format fmt;
@@ -524,7 +547,7 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 	fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
 	ret = ioctl(vid->fd, VIDIOC_S_FMT, &fmt);
 	if (ret) {
-		err("Failed to set format (%dx%d)", w, h);
+		err("CAPTURE: Failed to set format (%s)", strerror(errno));
 		return -1;
 	}
 
@@ -538,7 +561,7 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 	vid->cap_buf_cnt_min = 1;
 	vid->cap_buf_queued = 0;
 
-	info("Setup decoding CAPTURE buffer size=%u (%u)",
+	info("CAPTURE: Setup decoding buffer size=%u (%u)",
 	     vid->cap_buf_size[0], vid->cap_buf_size[1]);
 
 	memzero(reqbuf);
@@ -548,11 +571,11 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 
 	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
 	if (ret != 0) {
-		err("REQBUFS failed on CAPTURE queue (%s)", strerror(errno));
+		err("CAPTURE: REQBUFS failed (%s)", strerror(errno));
 		return -1;
 	}
 
-	info("Number of CAPTURE buffers is %d (requested %d)",
+	info("CAPTURE: Number of buffers is %u (requested %u)",
 		reqbuf.count, vid->cap_buf_cnt);
 
 	vid->cap_buf_cnt = reqbuf.count;
@@ -561,7 +584,7 @@ int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h)
 }
 
 int video_setup_output(struct instance *i, unsigned long codec,
-		       unsigned int size, int count)
+		       unsigned int size, unsigned int count)
 {
 	struct video *vid = &i->video;
 	struct v4l2_format fmt, try_fmt, g_fmt;
@@ -579,11 +602,13 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 	ret = ioctl(vid->fd, VIDIOC_TRY_FMT, &try_fmt);
 	if (ret) {
-		err("Failed to try format on OUTPUT (%s)", strerror(errno));
+		err("OUTPUT: Failed to try format (%s)", strerror(errno));
 	}
 
-	info("Try OUTPUT format sizeimage=%u",
-	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+	info("OUTPUT: Try format %ux%u sizeimage %u, bpl %u",
+	    try_fmt.fmt.pix_mp.width, try_fmt.fmt.pix_mp.height,
+	    try_fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+	    try_fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 #endif
 	memzero(fmt);
 	fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
@@ -593,25 +618,29 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 	ret = ioctl(vid->fd, VIDIOC_S_FMT, &fmt);
 	if (ret) {
-		err("Failed to set format on OUTPUT (%s)", strerror(errno));
+		err("OUTPUT: Failed to set format (%s)", strerror(errno));
 		return -1;
 	}
 
-	info("Setup decoding OUTPUT buffer size=%u",
-	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+	info("OUTPUT: Set format %ux%u sizeimage %u, bpl %u",
+	     fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
+	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+	     fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 
 	vid->out_buf_size = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 #if 1
 	memzero(g_fmt);
 	g_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	g_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
+	g_fmt.fmt.pix_mp.pixelformat = codec;
 
 	ret = ioctl(vid->fd, VIDIOC_G_FMT, &g_fmt);
 	if (ret) {
-		err("Failed to get format on OUTPUT (%s)", strerror(errno));
+		err("OUTPUT: Failed to get format (%s)", strerror(errno));
 	} else {
-		info("Get OUTPUT format sizeimage is %d",
-		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage);
+		info("OUTPUT: Get format %ux%u sizeimage %u, bpl %u",
+		     g_fmt.fmt.pix_mp.width, g_fmt.fmt.pix_mp.height,
+		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+		     g_fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 	}
 #endif
 	memzero(reqbuf);
@@ -621,13 +650,13 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
 	if (ret) {
-		err("REQBUFS failed on OUTPUT queue (%s)", strerror(errno));
+		err("OUTPUT: REQBUFS failed (%s)", strerror(errno));
 		return -1;
 	}
 
 	vid->out_buf_cnt = reqbuf.count;
 
-	info("Number of OUTPUT buffers is %d (requested %d)",
+	info("OUTPUT: Number of buffers is %u (requested %u)",
 	     vid->out_buf_cnt, count);
 
 	for (n = 0; n < vid->out_buf_cnt; n++) {
@@ -641,7 +670,7 @@ int video_setup_output(struct instance *i, unsigned long codec,
 
 		ret = ioctl(vid->fd, VIDIOC_QUERYBUF, &buf);
 		if (ret != 0) {
-			err("QUERYBUF failed on OUTPUT buffer");
+			err("OUTPUT: QUERYBUF failed (%s)", strerror(errno));
 			return -1;
 		}
 
@@ -654,14 +683,14 @@ int video_setup_output(struct instance *i, unsigned long codec,
 					    buf.m.planes[0].m.mem_offset);
 
 		if (vid->out_buf_addr[n] == MAP_FAILED) {
-			err("Failed to MMAP OUTPUT buffer");
+			err("OUTPUT: Failed to MMAP buffer");
 			return -1;
 		}
 
 		vid->out_buf_flag[n] = 0;
 	}
 
-	info("querybuf: OUTPUT sizeimage %d", vid->out_buf_size);
+	info("OUTPUT: querybuf sizeimage %u", vid->out_buf_size);
 
 	return 0;
 }

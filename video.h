@@ -41,28 +41,31 @@ int video_setup_output(struct instance *i, unsigned long codec,
  * buffers that should added to the minimum number of buffers required
  * by MFC. The final number of buffers allocated is stored in the instance
  * structure. */
-int video_setup_capture(struct instance *i, int extra_buf, int w, int h);
-int video_setup_capture_dmabuf(struct instance *i, int count, int w, int h);
+int video_setup_capture(struct instance *i, unsigned int extra_buf,
+			unsigned int w, unsigned int h);
+int video_setup_capture_dmabuf(struct instance *i, unsigned int count,
+			       unsigned int w, unsigned int h);
 
 /* Queue OUTPUT buffer */
-int video_queue_buf_out(struct instance *i, int n, int length);
+int video_queue_buf_out(struct instance *i, unsigned int n, unsigned int length);
 
 /* Queue CAPTURE buffer */
-int video_queue_buf_cap(struct instance *i, int n);
-int video_queue_buf_cap_dmabuf(struct instance *i, int index,
+int video_queue_buf_cap(struct instance *i, unsigned int n);
+int video_queue_buf_cap_dmabuf(struct instance *i, unsigned int index,
 			       struct drm_buffer *b);
 
 /* Control MFC streaming */
-int video_stream(struct instance *i, enum v4l2_buf_type type, int status);
+int video_stream(struct instance *i, enum v4l2_buf_type type, unsigned int status);
 
-int video_export_buf(struct instance *i, int index);
+int video_export_buf(struct instance *i, unsigned int index);
 
 /* Dequeue a buffer, the structure *buf is used to return the parameters of the
  * dequeued buffer. */
-int video_dequeue_output(struct instance *i, int *n);
-int video_dequeue_capture(struct instance *i, int *n, int *finished,
-			  unsigned int *bytesused);
-int video_dequeue_capture_dmabuf(struct instance *i, int *n, int *finished,
+int video_dequeue_output(struct instance *i, unsigned int *n);
+int video_dequeue_capture(struct instance *i, unsigned int *n,
+			  unsigned int *finished, unsigned int *bytesused);
+int video_dequeue_capture_dmabuf(struct instance *i, unsigned int *n,
+				 unsigned int *finished,
 				 unsigned int *bytesused);
 
 int video_set_control(struct instance *i);

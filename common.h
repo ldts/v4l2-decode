@@ -160,12 +160,15 @@ struct instance {
 	struct parser	parser;
 
 	pthread_mutex_t lock;
+	pthread_condattr_t attr;
+	pthread_cond_t cond;
+
 	struct queue queue;
 
 	/* Control */
 	int error;   /* The error flag */
-	int finish;  /* Flag set when decoding has been completed and all
-			threads finish */
+	unsigned int finish;  /* Flag set when decoding has been completed
+				and all threads finish */
 
 	struct drm_buffer disp_buf[MAX_CAP_BUF];
 };

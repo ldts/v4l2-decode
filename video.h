@@ -37,6 +37,8 @@ void video_close(struct instance *i);
 int video_setup_output(struct instance *i, unsigned long codec,
 		       unsigned int size, int count);
 
+int video_g_fmt(struct video *vid, unsigned int *width, unsigned int *height);
+
 /* Setup the CAPTURE queue. The argument extra_buf means the number of extra
  * buffers that should added to the minimum number of buffers required
  * by MFC. The final number of buffers allocated is stored in the instance
@@ -58,6 +60,7 @@ int video_queue_buf_cap_dmabuf(struct instance *i, unsigned int index,
 int video_stream(struct instance *i, enum v4l2_buf_type type, unsigned int status);
 
 int video_export_buf(struct instance *i, unsigned int index);
+int video_create_bufs(struct instance *i, unsigned int index, unsigned int count);
 
 /* Dequeue a buffer, the structure *buf is used to return the parameters of the
  * dequeued buffer. */

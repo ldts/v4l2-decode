@@ -111,6 +111,7 @@ static int subscribe_for_events(int fd)
 static int handle_v4l_events(struct video *vid)
 {
 	struct v4l2_event event;
+	unsigned int w, h;
 	int ret;
 
 	memset(&event, 0, sizeof(event));
@@ -126,6 +127,9 @@ static int handle_v4l_events(struct video *vid)
 		break;
 	case V4L2_EVENT_SOURCE_CHANGE:
 		info("Source changed");
+		ret = video_g_fmt(vid, &w, &h);
+		if (!ret)
+			info("new resolution %ux%u", w, h);
 		break;
 	default:
 		dbg("unknown event type occurred %x", event.type);
@@ -274,6 +278,10 @@ void *parser_thread_func(void *args)
 
 			dbg("Extracted frame of size %d", fs);
 
+			if (fs >= vid->out_buf_size)
+				err("fs %u, consumed %u, out buf sz %u",
+					fs, used, vid->out_buf_size);
+
 			ret = video_queue_buf_out(i, n, fs);
 
 			pthread_mutex_lock(&i->lock);
@@ -283,6 +291,10 @@ void *parser_thread_func(void *args)
 			dbg("queued output buffer %d", n);
 
 			i->in.offs += used;
+		} else {
+			pthread_mutex_lock(&i->lock);
+			pthread_cond_wait(&i->cond, &i->lock);
+			pthread_mutex_unlock(&i->lock);
 		}
 	}
 
@@ -384,6 +396,7 @@ next_event:
 				pthread_mutex_lock(&i->lock);
 				vid->out_buf_flag[n] = 0;
 				pthread_mutex_unlock(&i->lock);
+				pthread_cond_signal(&i->cond);
 			}
 
 			dbg("dequeued output buffer %d", n);
@@ -412,6 +425,8 @@ int main(int argc, char **argv)
 	info("decoding resolution is %dx%d", inst.width, inst.height);
 
 	pthread_mutex_init(&inst.lock, 0);
+	pthread_condattr_init(&inst.attr);
+	pthread_cond_init(&inst.cond, &inst.attr);
 
 	vid->total_captured = 0;
 
@@ -430,12 +445,11 @@ int main(int argc, char **argv)
 	ret = video_open(&inst, inst.video.name);
 	if (ret)
 		goto err;
-#if 1
-	/* TODO: */
+
 	ret = subscribe_for_events(vid->fd);
 	if (ret)
 		goto err;
-#endif
+
 	ret = video_setup_output(&inst, inst.parser.codec,
 				 STREAM_BUUFER_SIZE, 1);
 	if (ret)
@@ -459,10 +473,10 @@ int main(int argc, char **argv)
 
 	if (inst.use_dmabuf)
 		ret = drm_create_bufs(&inst.disp_buf[0], vid->cap_buf_cnt,
-				      inst.width, inst.height, 0);
+				      vid->cap_w, vid->cap_h, 0);
 	else
-		ret = drm_create_bufs(&inst.disp_buf[0], 1, inst.width,
-				      inst.height, 1);
+		ret = drm_create_bufs(&inst.disp_buf[0], 1, vid->cap_w,
+				      vid->cap_h, 1);
 	if (ret)
 		goto err;
 
@@ -475,6 +489,9 @@ int main(int argc, char **argv)
 		video_export_buf(&inst, n);
 #endif
 
+#if 0
+	video_create_bufs(&inst, 0, 1);
+#endif
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {
 		if (inst.use_dmabuf)
@@ -521,6 +538,8 @@ int main(int argc, char **argv)
 	cleanup(&inst);
 
 	pthread_mutex_destroy(&inst.lock);
+	pthread_cond_destroy(&inst.cond);
+	pthread_condattr_destroy(&inst.attr);
 
 	return 0;
 err:

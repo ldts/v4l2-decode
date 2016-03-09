@@ -60,8 +60,7 @@ int video_open(struct instance *i, char *name)
 	info("caps (%s): driver=\"%s\" bus_info=\"%s\" card=\"%s\" fd=0x%x",
 	     name, cap.driver, cap.bus_info, cap.card, i->video.fd);
 
-	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE) ||
-	    !(cap.capabilities & V4L2_CAP_VIDEO_OUTPUT_MPLANE) ||
+	if (!(cap.capabilities & V4L2_CAP_VIDEO_M2M_MPLANE) ||
 	    !(cap.capabilities & V4L2_CAP_STREAMING)) {
 		err("Insufficient capabilities for video device (is %s correct?)",
 		    name);

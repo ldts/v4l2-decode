@@ -60,7 +60,7 @@ int video_queue_buf_cap_dmabuf(struct instance *i, unsigned int index,
 int video_stream(struct instance *i, enum v4l2_buf_type type, unsigned int status);
 
 int video_export_buf(struct instance *i, unsigned int index);
-int video_create_bufs(struct instance *i, unsigned int index, unsigned int count);
+int video_create_bufs(struct instance *i, unsigned int *index, unsigned int count);
 
 /* Dequeue a buffer, the structure *buf is used to return the parameters of the
  * dequeued buffer. */

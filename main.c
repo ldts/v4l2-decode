@@ -108,8 +108,9 @@ static int subscribe_for_events(int fd)
 	return 0;
 }
 
-static int handle_v4l_events(struct video *vid)
+static int handle_v4l_events(struct instance *inst)
 {
+	struct video *vid = &inst->video;
 	struct v4l2_event event;
 	unsigned int w, h;
 	int ret;
@@ -130,6 +131,7 @@ static int handle_v4l_events(struct video *vid)
 		ret = video_g_fmt(vid, &w, &h);
 		if (!ret)
 			info("new resolution %ux%u", w, h);
+
 		break;
 	default:
 		dbg("unknown event type occurred %x", event.type);
@@ -331,7 +333,7 @@ void *main_thread_func(void *args)
 		revents = pfd.revents;
 
 		if (revents & POLLPRI)
-			handle_v4l_events(vid);
+			handle_v4l_events(i);
 
 		if (revents & (POLLIN | POLLRDNORM)) {
 			unsigned int bytesused;
@@ -364,7 +366,7 @@ void *main_thread_func(void *args)
 
 			drm_display_buf(vid->cap_buf_addr[n][0],
 					&i->disp_buf[disp_idx], bytesused,
-					i->width, i->height);
+					vid->cap_w, vid->cap_h);
 
 			print_time_delta("disp");
 
@@ -455,7 +457,7 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
-	ret = video_set_control(&inst);
+//	ret = video_set_control(&inst);
 	if (ret)
 		goto err;
 
@@ -490,7 +492,9 @@ int main(int argc, char **argv)
 #endif
 
 #if 0
-	video_create_bufs(&inst, 0, 1);
+	unsigned int index;
+
+	video_create_bufs(&inst, &index, 1);
 #endif
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {

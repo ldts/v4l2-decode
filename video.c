@@ -129,14 +129,14 @@ int video_export_buf(struct instance *i, unsigned int index)
 	return 0;
 }
 
-int video_create_bufs(struct instance *i, unsigned int index, unsigned int count)
+int video_create_bufs(struct instance *i, unsigned int *index,
+		      unsigned int count)
 {
 	struct video *vid = &i->video;
 	struct v4l2_create_buffers b;
 	int ret;
 
 	memzero(b);
-	b.index = index;
 	b.count = count;
 	b.memory = V4L2_MEMORY_MMAP;
 	b.format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
@@ -150,6 +150,8 @@ int video_create_bufs(struct instance *i, unsigned int index, unsigned int count
 			strerror(errno));
 		return -1;
 	}
+
+	*index = b.index;
 
 	info("create_bufs: index %u, count %u", b.index, b.count);
 
@@ -497,13 +499,7 @@ int video_setup_capture(struct instance *i, unsigned int count, unsigned int w,
 
 	vid->cap_w = fmt.fmt.pix_mp.width;
 	vid->cap_h = fmt.fmt.pix_mp.height;
-
 	vid->cap_buf_size[0] = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
-	vid->cap_buf_size[1] = fmt.fmt.pix_mp.plane_fmt[1].sizeimage;
-
-	vid->cap_buf_cnt = count;
-	vid->cap_buf_cnt_min = 1;
-	vid->cap_buf_queued = 0;
 
 	info("CAPTURE: Set format %ux%d sizeimage %u, bpl %u",
 	     fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
@@ -519,19 +515,20 @@ int video_setup_capture(struct instance *i, unsigned int count, unsigned int w,
 	if (ret) {
 		err("CAPTURE: Failed to get format (%s)", strerror(errno));
 		return -1;
-	} else {
-		info("CAPTURE: Get format %ux%u sizeimage %u, bpl %u",
-		     g_fmt.fmt.pix_mp.width, g_fmt.fmt.pix_mp.height,
-		     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
-		     g_fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 	}
+
+	info("CAPTURE: Get format %ux%u sizeimage %u, bpl %u",
+	     g_fmt.fmt.pix_mp.width, g_fmt.fmt.pix_mp.height,
+	     g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
+	     g_fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 
 	vid->cap_w = g_fmt.fmt.pix_mp.width;
 	vid->cap_h = g_fmt.fmt.pix_mp.height;
+	vid->cap_buf_size[0] = g_fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 #endif
 
 	memzero(reqbuf);
-	reqbuf.count = vid->cap_buf_cnt;
+	reqbuf.count = count;
 	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	reqbuf.memory = V4L2_MEMORY_MMAP;
 
@@ -542,7 +539,7 @@ int video_setup_capture(struct instance *i, unsigned int count, unsigned int w,
 	}
 
 	info("CAPTURE: Number of buffers is %u (requested %u)",
-		reqbuf.count, vid->cap_buf_cnt);
+		reqbuf.count, count);
 
 	vid->cap_buf_cnt = reqbuf.count;
 
@@ -607,17 +604,13 @@ int video_setup_capture_dmabuf(struct instance *i, unsigned int count,
 	vid->cap_buf_size[0] = fmt.fmt.pix_mp.plane_fmt[0].sizeimage;
 	vid->cap_buf_size[1] = fmt.fmt.pix_mp.plane_fmt[1].sizeimage;
 
-	vid->cap_buf_cnt = count;
-	vid->cap_buf_cnt_min = 1;
-	vid->cap_buf_queued = 0;
-
 	info("CAPTURE: Set format %ux%d sizeimage %u, bpl %u",
 	     fmt.fmt.pix_mp.width, fmt.fmt.pix_mp.height,
 	     fmt.fmt.pix_mp.plane_fmt[0].sizeimage,
 	     fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
 
 	memzero(reqbuf);
-	reqbuf.count = vid->cap_buf_cnt;
+	reqbuf.count = count;
 	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	reqbuf.memory = V4L2_MEMORY_DMABUF;
 

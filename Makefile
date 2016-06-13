@@ -32,7 +32,7 @@ INCLUDES = -I$(KERNELHEADERS) -I/usr/include/libdrm
 
 #-I$(TARGETROOT)/usr/include/linux
 
-SOURCES = main.c drm.c fileops.c args.c parser.c video.c queue.c
+SOURCES = main.c drm.c fileops.c args.c parser.c video.c
 OBJECTS := $(SOURCES:.c=.o)
 EXEC = v4l2_decode
 CFLAGS = -Wall -g -std=gnu99

@@ -28,7 +28,6 @@
 #include <semaphore.h>
 
 #include "parser.h"
-#include "queue.h"
 #include "drm-funcs.h"
 
 /* When ADD_DETAILS is defined every debug and error message contains
@@ -162,8 +161,6 @@ struct instance {
 	pthread_mutex_t lock;
 	pthread_condattr_t attr;
 	pthread_cond_t cond;
-
-	struct queue queue;
 
 	/* Control */
 	int error;   /* The error flag */

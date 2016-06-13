@@ -47,7 +47,7 @@ all: $(EXEC)
 	$(CC) -c $(CFLAGS) $(INCLUDES) $<
 
 $(EXEC): $(OBJECTS)
-	$(CC) -o v4l2_decode $(OBJECTS) -lpthread -ldrm -ldrm_freedreno
+	$(CC) -o $(EXEC) $(OBJECTS) -lpthread -ldrm -ldrm_freedreno
 
 clean:
 	rm -f *.o $(EXEC)

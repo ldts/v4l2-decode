@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <linux/videodev2.h>
-#include "msm-v4l2-controls.h"
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <poll.h>
@@ -464,7 +463,7 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
-//	ret = video_set_control(&inst);
+	ret = video_set_control(&inst);
 	if (ret)
 		goto err;
 

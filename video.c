@@ -21,7 +21,6 @@
  */
 
 #include <linux/videodev2.h>
-#include "msm-v4l2-controls.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -35,6 +34,8 @@
 
 /* mem2mem encoder/decoder */
 #define V4L2_BUF_FLAG_LAST			0x00100000
+
+#define V4L2_QCOM_BUF_FLAG_EOS			0x1000000
 
 static char *dbg_type[2] = {"OUTPUT", "CAPTURE"};
 static char *dbg_status[2] = {"ON", "OFF"};
@@ -77,17 +78,7 @@ void video_close(struct instance *i)
 
 int video_set_control(struct instance *i)
 {
-	struct v4l2_control control = {0};
-	int ret;
-
-	control.id = V4L2_CID_MPEG_VIDC_VIDEO_CONTINUE_DATA_TRANSFER;
-	control.value = 1;
-
-	ret = ioctl(i->video.fd, VIDIOC_S_CTRL, &control);
-	if (ret < 0)
-		err("setting cont data transfer (%s)", strerror(errno));
-
-	return ret;
+	return 0;
 }
 
 int video_set_framerate(struct instance *i, unsigned int framerate)

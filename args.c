@@ -35,14 +35,15 @@ void print_usage(char *name)
 {
 	printf("Usage:\n");
 	printf("\t%s\n", name);
-	printf("\t-c <codec> - The codec of the encoded stream\n");
-	printf("\t\t     Available codecs: mpeg4, h264\n");
+	printf("\t-c <codec> - The codec of the encoded stream, "
+	       "available codecs: mpeg4, h264\n");
 	printf("\t-d use dmabuf instead of mmap\n");
 	printf("\t-i <file> - Input file name\n");
 	printf("\t-m <device> - video decoder device (e.g. /dev/video8)\n");
 	printf("\t-w video width\n");
 	printf("\t-h video height\n");
 	printf("\t-f save frames on disk\n");
+	printf("\t-D use drm/kms for displaying\n");
 
 	printf("\n");
 }
@@ -76,7 +77,7 @@ int parse_args(struct instance *i, int argc, char **argv)
 
 	init_to_defaults(i);
 
-	while ((c = getopt(argc, argv, "w:h:c:di:m:f:")) != -1) {
+	while ((c = getopt(argc, argv, "w:h:c:di:m:f:D")) != -1) {
 		switch (c) {
 		case 'c':
 			i->parser.codec = get_codec(optarg);
@@ -99,6 +100,9 @@ int parse_args(struct instance *i, int argc, char **argv)
 		case 'f':
 			i->save_frames = 1;
 			i->save_path = optarg;
+			break;
+		case 'D':
+			i->use_drm = 1;
 			break;
 		default:
 			err("Bad argument");

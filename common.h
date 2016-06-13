@@ -149,6 +149,8 @@ struct instance {
 
 	int use_dmabuf;
 
+	int use_drm;
+
 	/* Input file related parameters */
 	struct input	in;
 

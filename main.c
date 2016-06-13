@@ -273,7 +273,7 @@ void *parser_thread_func(void *args)
 					     &used, &fs, 0);
 
 			if (ret == 0 && i->in.offs == i->in.size) {
-				info("Parser has extracted all frames");
+				dbg("Parser has extracted all frames");
 				i->parser.finished = 1;
 				fs = 0;
 			}
@@ -320,6 +320,8 @@ void *main_thread_func(void *args)
 	pfd.events = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM |
 		     POLLRDBAND | POLLPRI;
 
+	fprintf(stdout, "decoded frame ");
+
 	while (1) {
 		ret = poll(&pfd, 1, 10000);
 		if (!ret) {
@@ -355,6 +357,9 @@ void *main_thread_func(void *args)
 
 			dbg("decoded frame %ld", vid->total_captured);
 
+			fprintf(stdout, "%03ld\b\b\b", vid->total_captured);
+			fflush(stdout);
+
 			if (finished)
 				break;
 
@@ -364,9 +369,11 @@ void *main_thread_func(void *args)
 
 			time_start();
 
-			drm_display_buf(vid->cap_buf_addr[n][0],
-					&i->disp_buf[disp_idx], bytesused,
-					vid->cap_w, vid->cap_h);
+			if (i->use_drm)
+				drm_display_buf(vid->cap_buf_addr[n][0],
+						&i->disp_buf[disp_idx],
+						bytesused,
+						vid->cap_w, vid->cap_h);
 
 			print_time_delta("disp");
 
@@ -433,7 +440,7 @@ int main(int argc, char **argv)
 	vid->total_captured = 0;
 
 	ret = drm_init();
-	if (ret)
+	if (inst.use_drm && ret)
 		goto err;
 
 	ret = parse_stream_init(&inst.parser.ctx);
@@ -473,13 +480,13 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
-	if (inst.use_dmabuf)
-		ret = drm_create_bufs(&inst.disp_buf[0], vid->cap_buf_cnt,
+	if (inst.use_dmabuf && inst.use_drm)
+		ret = drm_create_bufs(inst.disp_buf, vid->cap_buf_cnt,
 				      vid->cap_w, vid->cap_h, 0);
-	else
-		ret = drm_create_bufs(&inst.disp_buf[0], 1, vid->cap_w,
+	else if (inst.use_drm)
+		ret = drm_create_bufs(inst.disp_buf, 1, vid->cap_w,
 				      vid->cap_h, 1);
-	if (ret)
+	if (inst.use_drm && ret)
 		goto err;
 
 	ret = extract_and_process_header(&inst);

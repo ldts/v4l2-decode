@@ -487,6 +487,9 @@ int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
 	struct drm_buffer *buf;
 	int ret;
 
+	if (!buffers)
+		return -EINVAL;
+
 	for (unsigned int i = 0; i < count; ++i) {
 		buf = &buffers[i];
 
@@ -527,6 +530,9 @@ int drm_destroy_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
 	uint64_t size = (dev->width * dev->height * 3 / 2) / 2;
 	struct drm_buffer *buf;
 	int fd = dev->fd;
+
+	if (!buffers)
+		return -EINVAL;
 
 	for (unsigned int i = 0; i < count; ++i) {
 		buf = &buffers[i];
@@ -584,15 +590,18 @@ int drm_init(void)
 
 err:
 	close(fd);
+	pdev = NULL;
 	return -1;
 }
 
 int drm_deinit(void)
 {
 	struct drm_dev *dev = pdev;
-	int fd = dev->fd;
 
-	close(fd);
+	if (!dev)
+		return -EINVAL;
+
+	close(dev->fd);
 
 	return 0;
 }
@@ -609,6 +618,9 @@ int drm_display_buf(const void *src, struct drm_buffer *b, unsigned int size,
 	uint8_t *to;
 	int ret;
 	int i;
+
+	if (!b)
+		return -EINVAL;
 
 	if (b->mmap_buf == MAP_FAILED || b->mmap_buf == NULL)
 		goto set_plane;

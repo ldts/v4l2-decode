@@ -22,6 +22,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
@@ -140,7 +141,7 @@ static int handle_v4l_events(struct instance *inst)
 	return 0;
 }
 
-void cleanup(struct instance *i)
+static void cleanup(struct instance *i)
 {
 	if (i->video.fd)
 		video_close(i);
@@ -148,7 +149,7 @@ void cleanup(struct instance *i)
 		input_close(i);
 }
 
-int extract_and_process_header(struct instance *i)
+static int extract_and_process_header(struct instance *i)
 {
 	int used, fs;
 	int ret;
@@ -202,7 +203,7 @@ int extract_and_process_header(struct instance *i)
 	return 0;
 }
 
-int save_frame(struct instance *i, const void *buf, unsigned int size)
+static int save_frame(struct instance *i, const void *buf, unsigned int size)
 {
 	mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 	char filename[64];
@@ -246,7 +247,7 @@ int save_frame(struct instance *i, const void *buf, unsigned int size)
 
 /* This threads is responsible for parsing the stream and
  * feeding video decoder with consecutive frames to decode */
-void *parser_thread_func(void *args)
+static void *parser_thread_func(void *args)
 {
 	struct instance *i = (struct instance *)args;
 	struct video *vid = &i->video;
@@ -304,7 +305,86 @@ void *parser_thread_func(void *args)
 	return NULL;
 }
 
-void *main_thread_func(void *args)
+#define TYPE_QBUF	1
+#define TYPE_DQBUF	2
+#define STAT_BUFS	1000
+
+static int trace_init(struct instance *i)
+{
+	i->stats = calloc(STAT_BUFS, sizeof(struct buf_stats));
+	if (!i->stats)
+		return -1;
+
+	return 0;
+}
+
+static void trace_deinit(struct instance *i)
+{
+	if (i->stats)
+		free(i->stats);
+}
+
+static void trace_buf_start(struct instance *i, unsigned int type)
+{
+	struct buf_stats *stats = i->stats;
+
+	if (stats->dqbuf_counter > STAT_BUFS ||
+	    stats->qbuf_counter > STAT_BUFS)
+		return;
+
+	if (stats->dqbuf_counter == 0)
+		gettimeofday(&stats->start, NULL);
+
+	if (type == TYPE_DQBUF)
+		gettimeofday(&stats[stats->dqbuf_counter].dqbuf_start, NULL);
+	else
+		gettimeofday(&stats[stats->qbuf_counter].qbuf_start, NULL);
+}
+
+static void trace_buf_finish(struct instance *i, unsigned int type)
+{
+	struct buf_stats *stats = i->stats;
+
+	if (stats->dqbuf_counter > STAT_BUFS ||
+	    stats->qbuf_counter > STAT_BUFS)
+		return;
+
+	if (type == TYPE_DQBUF) {
+		gettimeofday(&stats[stats->dqbuf_counter].dqbuf_end, NULL);
+		stats->dqbuf_counter++;
+	} else {
+		gettimeofday(&stats[stats->qbuf_counter].qbuf_end, NULL);
+		stats->qbuf_counter++;
+	}
+
+	gettimeofday(&stats->end, NULL);
+}
+
+static void trace_show(struct instance *inst)
+{
+	struct buf_stats *stats = inst->stats;
+	unsigned long long delta, time, fps;
+	unsigned int last = stats->dqbuf_counter - 1;
+
+	delta = (stats[last].dqbuf_end.tv_sec * 1000000 +
+		 stats[last].dqbuf_end.tv_usec);
+
+	delta -=(stats[0].dqbuf_end.tv_sec * 1000000 +
+		 stats[0].dqbuf_end.tv_usec);
+
+	time = delta / last; /* time per frame in us */
+	fps = 1000000 / time;
+
+	fprintf(stdout, "%lld fps (%lld ms)\n", fps, time / 1000);
+
+	time = stats->end.tv_sec * 1000000 + stats->end.tv_usec;
+	time -= stats->start.tv_sec * 1000000 + stats->start.tv_usec;
+
+	fprintf(stdout, "total time %lld ms (%lld)\n", time / 1000,
+		last * 1000000 / time);
+}
+
+static void *main_thread_func(void *args)
 {
 	struct instance *i = args;
 	struct video *vid = &i->video;
@@ -343,12 +423,17 @@ void *main_thread_func(void *args)
 
 			dbg("dequeuing capture buffer");
 
+			trace_buf_start(i, TYPE_DQBUF);
+
 			if (i->use_dmabuf)
 				ret = video_dequeue_capture_dmabuf(
 						i, &n, &finished, &bytesused);
 			else
 				ret = video_dequeue_capture(i, &n, &finished,
 							    &bytesused);
+
+			trace_buf_finish(i, TYPE_DQBUF);
+
 			if (ret < 0)
 				goto next_event;
 
@@ -356,7 +441,8 @@ void *main_thread_func(void *args)
 
 			dbg("decoded frame %ld", vid->total_captured);
 
-			fprintf(stdout, "%03ld\b\b\b", vid->total_captured);
+			fprintf(stdout, "%08ld\b\b\b\b\b\b\b\b",
+				vid->total_captured);
 			fflush(stdout);
 
 			if (finished)
@@ -379,11 +465,15 @@ void *main_thread_func(void *args)
 			save_frame(i, (void *)vid->cap_buf_addr[n][0],
 				   bytesused);
 
+			trace_buf_start(i, TYPE_QBUF);
+
 			if (i->use_dmabuf)
 				ret = video_queue_buf_cap_dmabuf(
 							i, n, &i->disp_buf[n]);
 			else
 				ret = video_queue_buf_cap(i, n);
+
+			trace_buf_finish(i, TYPE_QBUF);
 
 			if (!ret)
 				vid->cap_buf_flag[n] = 1;
@@ -437,6 +527,10 @@ int main(int argc, char **argv)
 	pthread_cond_init(&inst.cond, &inst.attr);
 
 	vid->total_captured = 0;
+
+	ret = trace_init(&inst);
+	if (ret)
+		goto err;
 
 	ret = drm_init();
 	if (inst.use_drm && ret)
@@ -538,14 +632,18 @@ int main(int argc, char **argv)
 
 	info("Total frames captured %ld", vid->total_captured);
 
-	if (inst.use_dmabuf)
+	if (inst.use_drm && inst.use_dmabuf)
 		drm_destroy_bufs(inst.disp_buf, vid->cap_buf_cnt, 0);
-	else
+	else if (inst.use_drm)
 		drm_destroy_bufs(inst.disp_buf, 1, 1);
 
 	drm_deinit();
 
 	cleanup(&inst);
+
+	trace_show(&inst);
+
+	trace_deinit(&inst);
 
 	pthread_mutex_destroy(&inst.lock);
 	pthread_cond_destroy(&inst.cond);

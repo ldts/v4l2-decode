@@ -141,6 +141,17 @@ struct parser {
 	int finished;
 };
 
+struct buf_stats {
+	unsigned int qbuf_counter;
+	unsigned int dqbuf_counter;
+	struct timeval qbuf_start;
+	struct timeval qbuf_end;
+	struct timeval dqbuf_start;
+	struct timeval dqbuf_end;
+	struct timeval start;
+	struct timeval end;
+};
+
 struct instance {
 	int width;
 	int height;
@@ -170,6 +181,9 @@ struct instance {
 				and all threads finish */
 
 	struct drm_buffer disp_buf[MAX_CAP_BUF];
+
+	/* buffer statistics */
+	struct buf_stats *stats;
 };
 
 #endif /* INCLUDE_COMMON_H */

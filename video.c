@@ -35,8 +35,6 @@
 /* mem2mem encoder/decoder */
 #define V4L2_BUF_FLAG_LAST			0x00100000
 
-#define V4L2_QCOM_BUF_FLAG_EOS			0x1000000
-
 static char *dbg_type[2] = {"OUTPUT", "CAPTURE"};
 static char *dbg_status[2] = {"ON", "OFF"};
 
@@ -326,9 +324,7 @@ int video_dequeue_capture(struct instance *i, unsigned int *n,
 
 	*finished = 0;
 
-	if (buf.flags & V4L2_QCOM_BUF_FLAG_EOS ||
-	    buf.flags & V4L2_BUF_FLAG_LAST ||
-	    buf.m.planes[0].bytesused == 0)
+	if (buf.flags & V4L2_BUF_FLAG_LAST || buf.m.planes[0].bytesused == 0)
 		*finished = 1;
 
 	*bytesused = buf.m.planes[0].bytesused;
@@ -355,8 +351,7 @@ int video_dequeue_capture_dmabuf(struct instance *i, unsigned int *n,
 
 	*finished = 0;
 
-	if (buf.flags & V4L2_QCOM_BUF_FLAG_EOS ||
-	    buf.m.planes[0].bytesused == 0)
+	if (buf.flags & V4L2_BUF_FLAG_LAST || buf.m.planes[0].bytesused == 0)
 		*finished = 1;
 
 	*bytesused = buf.m.planes[0].bytesused;
@@ -388,6 +383,7 @@ int video_stop(struct instance *i)
 {
 	struct video *vid = &i->video;
 	struct v4l2_requestbuffers reqbuf;
+	unsigned int n;
 	int ret;
 
 #if 0
@@ -410,6 +406,19 @@ int video_stop(struct instance *i)
 			   VIDIOC_STREAMOFF);
 	if (ret < 0)
 		err("STREAMOFF OUTPUT queue failed (%s)", strerror(errno));
+
+	/* unmap buffers */
+	for (n = 0; n < vid->cap_buf_cnt; n++) {
+		ret = munmap(vid->cap_buf_addr[n][0], vid->cap_buf_size[0]);
+		if (ret)
+			err("unmap failed %s", strerror(errno));
+	}
+
+	for (n = 0; n < vid->out_buf_cnt; n++) {
+		ret = munmap(vid->out_buf_addr[n], vid->out_buf_size);
+		if (ret)
+			err("unmap failed %s", strerror(errno));
+	}
 
 	memzero(reqbuf);
 	reqbuf.count = 0;

@@ -76,6 +76,18 @@ void video_close(struct instance *i)
 
 int video_set_control(struct instance *i)
 {
+	struct v4l2_control ctrl;
+	int fd = i->video.fd;
+	int ret;
+
+	ctrl.id = V4L2_CID_MPEG_VIDEO_DECODER_MPEG4_DEBLOCK_FILTER;
+	ctrl.value = 1;
+
+	info("setting deblock filter: %u", ctrl.value);
+	ret = ioctl(i->video.fd, VIDIOC_S_CTRL, &ctrl);
+	if (ret)
+		err("set control - deblock filter (%s)", strerror(errno));
+
 	return 0;
 }
 
@@ -373,8 +385,8 @@ int video_stream(struct instance *i, enum v4l2_buf_type type, unsigned int statu
 		return -1;
 	}
 
-	dbg("Stream %s on %s queue", dbg_status[status==VIDIOC_STREAMOFF],
-	    dbg_type[type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE]);
+	info("Stream %s on %s queue", dbg_status[status==VIDIOC_STREAMOFF],
+	     dbg_type[type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE]);
 
 	return 0;
 }
@@ -408,10 +420,13 @@ int video_stop(struct instance *i)
 		err("STREAMOFF OUTPUT queue failed (%s)", strerror(errno));
 
 	/* unmap buffers */
-	for (n = 0; n < vid->cap_buf_cnt; n++) {
-		ret = munmap(vid->cap_buf_addr[n][0], vid->cap_buf_size[0]);
-		if (ret)
-			err("unmap failed %s", strerror(errno));
+	if (!i->use_dmabuf) {
+		for (n = 0; n < vid->cap_buf_cnt; n++) {
+			ret = munmap(vid->cap_buf_addr[n][0],
+				     vid->cap_buf_size[0]);
+			if (ret)
+				err("unmap failed %s", strerror(errno));
+		}
 	}
 
 	for (n = 0; n < vid->out_buf_cnt; n++) {
@@ -423,7 +438,10 @@ int video_stop(struct instance *i)
 	memzero(reqbuf);
 	reqbuf.count = 0;
 	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-	reqbuf.memory = V4L2_MEMORY_MMAP;
+	if (i->use_dmabuf)
+		reqbuf.memory = V4L2_MEMORY_DMABUF;
+	else
+		reqbuf.memory = V4L2_MEMORY_MMAP;
 
 	info("calling reqbuf(0)");
 
@@ -432,6 +450,7 @@ int video_stop(struct instance *i)
 		err("REQBUFS(0) on CAPTURE queue (%s)", strerror(errno));
 
 	reqbuf.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+	reqbuf.memory = V4L2_MEMORY_MMAP;
 
 	ret = ioctl(vid->fd, VIDIOC_REQBUFS, &reqbuf);
 	if (ret < 0)

@@ -64,6 +64,26 @@ struct v4l2_ops {
 	int (*qbuf_out)(struct instance *i, int n, int length);
 };
 #endif
+
+#if 0
+
+int drm_init(void) { return 0; }
+int drm_deinit(void) { return 0; }
+int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
+		    unsigned int width, unsigned int height, int mmaped)
+{ return 0; }
+
+int drm_destroy_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
+{ return 0; }
+
+
+
+int drm_display_buf(const void *src, struct drm_buffer *b, unsigned int size,
+		    unsigned int width, unsigned int height)
+{ return 0; }
+
+#endif
+
 static const unsigned int event_types[] = {
 	V4L2_EVENT_EOS,
 	V4L2_EVENT_SOURCE_CHANGE,
@@ -153,7 +173,7 @@ static int extract_and_process_header(struct instance *i)
 {
 	int used, fs;
 	int ret;
-	int n;
+	unsigned int n;
 	struct video *vid = &i->video;
 
 	ret = i->parser.func(&i->parser.ctx,
@@ -186,7 +206,7 @@ static int extract_and_process_header(struct instance *i)
 	dbg("queued output buffer %d", 0);
 
 	i->video.out_buf_flag[0] = 1;
-#if 1
+#if 0
 	for (n = 1; n < vid->out_buf_cnt; n++) {
 		ret = video_queue_buf_out(i, n, 1);
 		if (ret)
@@ -199,6 +219,14 @@ static int extract_and_process_header(struct instance *i)
 			   VIDIOC_STREAMON);
 	if (ret)
 		return -1;
+
+#if 0
+	ret = video_dequeue_output(i, &n);
+	if (ret < 0) {
+		err("dequeue output buffer fail");
+		return ret;
+	}
+#endif
 
 	return 0;
 }
@@ -328,8 +356,8 @@ static void trace_buf_start(struct instance *i, unsigned int type)
 {
 	struct buf_stats *stats = i->stats;
 
-	if (stats->dqbuf_counter > STAT_BUFS ||
-	    stats->qbuf_counter > STAT_BUFS)
+	if (stats->dqbuf_counter >= STAT_BUFS ||
+	    stats->qbuf_counter >= STAT_BUFS)
 		return;
 
 	if (stats->dqbuf_counter == 0)
@@ -345,8 +373,8 @@ static void trace_buf_finish(struct instance *i, unsigned int type)
 {
 	struct buf_stats *stats = i->stats;
 
-	if (stats->dqbuf_counter > STAT_BUFS ||
-	    stats->qbuf_counter > STAT_BUFS)
+	if (stats->dqbuf_counter >= STAT_BUFS ||
+	    stats->qbuf_counter >= STAT_BUFS)
 		return;
 
 	if (type == TYPE_DQBUF) {
@@ -532,9 +560,11 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
-	ret = drm_init();
-	if (inst.use_drm && ret)
-		goto err;
+	if (inst.use_drm) {
+		ret = drm_init();
+		if (ret)
+			goto err;
+	}
 
 	ret = parse_stream_init(&inst.parser.ctx);
 	if (ret)
@@ -553,7 +583,7 @@ int main(int argc, char **argv)
 		goto err;
 
 	ret = video_setup_output(&inst, inst.parser.codec,
-				 STREAM_BUUFER_SIZE, 1);
+				 STREAM_BUUFER_SIZE, 4);
 	if (ret)
 		goto err;
 
@@ -582,20 +612,25 @@ int main(int argc, char **argv)
 	if (inst.use_drm && ret)
 		goto err;
 
-	ret = extract_and_process_header(&inst);
-	if (ret)
-		goto err;
-
-#if 0
-	for (n = 0; n < vid->cap_buf_cnt; n++)
-		video_export_buf(&inst, n);
-#endif
-
+	if (0 && inst.use_dmabuf) {
+		for (n = 0; n < vid->cap_buf_cnt; n++) {
+			ret = video_export_buf(&inst, n);
+			if (ret)
+				goto error;
+		}
+	}
 #if 0
 	unsigned int index;
 
 	video_create_bufs(&inst, &index, 1);
 #endif
+
+	ret = video_stream(&inst, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
+			   VIDIOC_STREAMON);
+	if (ret)
+		goto err;
+
+#if 1
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {
 		if (inst.use_dmabuf)
@@ -609,11 +644,19 @@ int main(int argc, char **argv)
 
 		vid->cap_buf_flag[n] = 1;
 	}
-
-	ret = video_stream(&inst, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
-			   VIDIOC_STREAMON);
+#endif
+	ret = extract_and_process_header(&inst);
 	if (ret)
 		goto err;
+
+	unsigned int new_cap_w = 0, new_cap_h = 0;
+
+	ret = video_g_fmt(vid, &new_cap_w, &new_cap_h);
+	if (ret)
+		goto err;
+
+	info("new capture resolution: %ux%u", new_cap_w, new_cap_h);
+
 
 	dbg("Launching threads");
 
@@ -628,6 +671,7 @@ int main(int argc, char **argv)
 
 	dbg("Threads have finished");
 
+error:
 	video_stop(&inst);
 
 	info("Total frames captured %ld", vid->total_captured);
@@ -637,7 +681,8 @@ int main(int argc, char **argv)
 	else if (inst.use_drm)
 		drm_destroy_bufs(inst.disp_buf, 1, 1);
 
-	drm_deinit();
+	if (inst.use_drm)
+		drm_deinit();
 
 	cleanup(&inst);
 

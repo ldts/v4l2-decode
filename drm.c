@@ -487,6 +487,9 @@ int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
 	struct drm_buffer *buf;
 	int ret;
 
+	info("drm: create %u %s buffers with %ux%u", count,
+		mmaped ? "mmaped" : "", width, height);
+
 	if (!buffers)
 		return -EINVAL;
 

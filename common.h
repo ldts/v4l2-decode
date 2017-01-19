@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <semaphore.h>
+#include <sys/time.h>
 
 #include "parser.h"
 #include "drm-funcs.h"

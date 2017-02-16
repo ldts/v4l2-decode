@@ -66,6 +66,54 @@ int video_open(struct instance *i, char *name)
 		return -1;
 	}
 
+	/* check is it a decoder video device */
+
+	struct v4l2_fmtdesc fdesc;
+
+	memzero(fdesc);
+	fdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+
+	while (!ioctl(i->video.fd, VIDIOC_ENUM_FMT, &fdesc)) {
+		dbg("  %s", fdesc.description);
+
+		switch (fdesc.pixelformat) {
+		case V4L2_PIX_FMT_NV12:
+		case V4L2_PIX_FMT_NV21:
+			break;
+		default:
+			err("not a decoder video device");
+			return -1;
+		}
+
+		fdesc.index++;
+	}
+
+	memzero(fdesc);
+	fdesc.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+
+	while (!ioctl(i->video.fd, VIDIOC_ENUM_FMT, &fdesc)) {
+		dbg("  %s", fdesc.description);
+
+		switch (fdesc.pixelformat) {
+		case V4L2_PIX_FMT_MPEG:
+		case V4L2_PIX_FMT_H264:
+		case V4L2_PIX_FMT_H263:
+		case V4L2_PIX_FMT_MPEG1:
+		case V4L2_PIX_FMT_MPEG2:
+		case V4L2_PIX_FMT_MPEG4:
+		case V4L2_PIX_FMT_XVID:
+		case V4L2_PIX_FMT_VC1_ANNEX_G:
+		case V4L2_PIX_FMT_VC1_ANNEX_L:
+		case V4L2_PIX_FMT_VP8:
+			break;
+		default:
+			err("not a decoder video device");
+			return -1;
+		}
+
+		fdesc.index++;
+	}
+
         return 0;
 }
 
@@ -84,7 +132,7 @@ int video_set_control(struct instance *i)
 	ctrl.value = 1;
 
 	info("setting deblock filter: %u", ctrl.value);
-	ret = ioctl(i->video.fd, VIDIOC_S_CTRL, &ctrl);
+	ret = ioctl(fd, VIDIOC_S_CTRL, &ctrl);
 	if (ret)
 		err("set control - deblock filter (%s)", strerror(errno));
 
@@ -130,7 +178,8 @@ int video_export_buf(struct instance *i, unsigned int index)
 	return 0;
 }
 
-int video_create_bufs(struct instance *i, unsigned int *index,
+int video_create_bufs(struct instance *i, unsigned int width,
+		      unsigned int height,unsigned int *index,
 		      unsigned int count)
 {
 	struct video *vid = &i->video;
@@ -141,8 +190,8 @@ int video_create_bufs(struct instance *i, unsigned int *index,
 	b.count = count;
 	b.memory = V4L2_MEMORY_MMAP;
 	b.format.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-	b.format.fmt.pix_mp.width = 1280;
-	b.format.fmt.pix_mp.height = 720;
+	b.format.fmt.pix_mp.width = width;
+	b.format.fmt.pix_mp.height = height;
 	b.format.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
 
 	ret = ioctl(vid->fd, VIDIOC_CREATE_BUFS, &b);

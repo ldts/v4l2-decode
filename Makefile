@@ -19,22 +19,22 @@
 # Toolchain path
 TCPATH = aarch64-linux-gnu-
 KERNELHEADERS = /usr/include
-SYSROOT = /home/svarbanov/work/oe/oe-rpb/build-rpb-wayland/tmp-rpb_wayland-glibc/sysroots
-SYSROOTINC = $(SYSROOT)/dragonboard-410c/usr/include
-SYSROOTLIBS = $(SYSROOT)/dragonboard-410c/usr/lib
+SYSROOT = /home/svarbanov/work/oe/oe-rpb/build-rpb-wayland/tmp-rpb_wayland-glibc/sysroots-components/aarch64
+SYSROOTINC = $(SYSROOT)/libdrm/usr/include
+SYSROOTLIBS = $(SYSROOT)/libdrm/usr/lib64
 
 CC = ${TCPATH}gcc
 AR = "${TCPATH}ar rc"
 AR2 = ${TCPATH}ranlib make -j4
 
 
-INCLUDES = -I$(KERNELHEADERS) -I/usr/include/libdrm -I$(SYSROOTINC)
+INCLUDES = -I$(SYSROOTINC)/libdrm -I$(SYSROOTINC) -I$(KERNELHEADERS)
 
-SOURCES = main.c drm.c fileops.c args.c parser.c video.c
+SOURCES = main.c drm.c fileops.c args.c parser.c video.c tracer.c
 OBJECTS := $(SOURCES:.c=.o)
 EXEC = v4l2_decode
 CFLAGS = -Wall -g -std=gnu99
-LIBS = -lpthread -ldrm_freedreno -lm
+LIBS = -Wl,-lpthread -Wl,-L$(SYSROOTLIBS) -ldrm
 LIBPATH = -L/usr/lib/aarch64-linux-gnu
 LDFLAGS = -o $(EXEC) $(LIBPATH) $(LIBS)
 
@@ -44,7 +44,7 @@ all: $(EXEC)
 	$(CC) -c $(CFLAGS) $(INCLUDES) $<
 
 $(EXEC): $(OBJECTS)
-	$(CC) -o $(EXEC) $(OBJECTS) -Wl,-lpthread -Wl,-L$(SYSROOTLIBS) -ldrm -ldrm_freedreno
+	$(CC) -o $(EXEC) $(OBJECTS) $(LIBS)
 
 clean:
 	rm -f *.o $(EXEC)

@@ -40,33 +40,13 @@
 #include "video.h"
 #include "parser.h"
 #include "drm-funcs.h"
+#include "tracer.h"
 
 /* This is the size of the buffer for the compressed stream.
  * It limits the maximum compressed frame size. */
-#define STREAM_BUUFER_SIZE	(1024 * 1024)
-
-/* The number of compress4ed stream buffers */
-#define STREAM_BUFFER_CNT	2
-
-/* The number of extra buffers for the decoded output.
- * This is the number of buffers that the application can keep
- * used and still enable video device to decode with the hardware. */
-#define RESULT_EXTRA_BUFFER_CNT 2
-#if 0
-struct v4l2_ops {
-	int (*setup_cap)(struct instance *i, int count, int w, int h);
-	int (*setup_out)(struct instance *i, unsigned long codec,
-			 unsigned int size, int count);
-	int (*dqbuf_cap)(struct instance *i, int *n, int *finished,
-			 unsigned int *bytesused);
-	int (*qbuf_cap)(struct instance *i, int index, struct drm_buffer *b);
-	int (*dqbuf_out)(struct instance *i, int *n);
-	int (*qbuf_out)(struct instance *i, int n, int length);
-};
-#endif
+#define STREAM_BUFFER_SIZE	(1024 * 1024)
 
 #if 0
-
 int drm_init(void) { return 0; }
 int drm_deinit(void) { return 0; }
 int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
@@ -76,12 +56,9 @@ int drm_create_bufs(struct drm_buffer *buffers, unsigned int count,
 int drm_destroy_bufs(struct drm_buffer *buffers, unsigned int count, int mmaped)
 { return 0; }
 
-
-
 int drm_display_buf(const void *src, struct drm_buffer *b, unsigned int size,
 		    unsigned int width, unsigned int height)
 { return 0; }
-
 #endif
 
 static const unsigned int event_types[] = {
@@ -242,17 +219,13 @@ static int save_frame(struct instance *i, const void *buf, unsigned int size)
 	if (!i->save_frames)
 		return 0;
 
-	if (!i->save_path)
-		ret = sprintf(filename, "/mnt/frame%04d.nv12", frame_num);
-	else
-		ret = sprintf(filename, "%s/frame%04d.nv12", i->save_path,
-			      frame_num);
+	ret = sprintf(filename, "%s/frame%04d.nv12", i->save_path, frame_num);
 	if (ret < 0) {
 		err("sprintf fail (%s)", strerror(errno));
 		return -1;
 	}
 
-	dbg("create file %s", filename);
+	dbg("creating file %s", filename);
 
 	fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, mode);
 	if (fd < 0) {
@@ -333,85 +306,6 @@ static void *parser_thread_func(void *args)
 	return NULL;
 }
 
-#define TYPE_QBUF	1
-#define TYPE_DQBUF	2
-#define STAT_BUFS	1000
-
-static int trace_init(struct instance *i)
-{
-	i->stats = calloc(STAT_BUFS, sizeof(struct buf_stats));
-	if (!i->stats)
-		return -1;
-
-	return 0;
-}
-
-static void trace_deinit(struct instance *i)
-{
-	if (i->stats)
-		free(i->stats);
-}
-
-static void trace_buf_start(struct instance *i, unsigned int type)
-{
-	struct buf_stats *stats = i->stats;
-
-	if (stats->dqbuf_counter >= STAT_BUFS ||
-	    stats->qbuf_counter >= STAT_BUFS)
-		return;
-
-	if (stats->dqbuf_counter == 0)
-		gettimeofday(&stats->start, NULL);
-
-	if (type == TYPE_DQBUF)
-		gettimeofday(&stats[stats->dqbuf_counter].dqbuf_start, NULL);
-	else
-		gettimeofday(&stats[stats->qbuf_counter].qbuf_start, NULL);
-}
-
-static void trace_buf_finish(struct instance *i, unsigned int type)
-{
-	struct buf_stats *stats = i->stats;
-
-	if (stats->dqbuf_counter >= STAT_BUFS ||
-	    stats->qbuf_counter >= STAT_BUFS)
-		return;
-
-	if (type == TYPE_DQBUF) {
-		gettimeofday(&stats[stats->dqbuf_counter].dqbuf_end, NULL);
-		stats->dqbuf_counter++;
-	} else {
-		gettimeofday(&stats[stats->qbuf_counter].qbuf_end, NULL);
-		stats->qbuf_counter++;
-	}
-
-	gettimeofday(&stats->end, NULL);
-}
-
-static void trace_show(struct instance *inst)
-{
-	struct buf_stats *stats = inst->stats;
-	unsigned long long delta, time, fps;
-	unsigned int last = stats->dqbuf_counter - 1;
-
-	delta = (stats[last].dqbuf_end.tv_sec * 1000000 +
-		 stats[last].dqbuf_end.tv_usec);
-
-	delta -=(stats[0].dqbuf_end.tv_sec * 1000000 +
-		 stats[0].dqbuf_end.tv_usec);
-
-	time = delta / last; /* time per frame in us */
-	fps = 1000000 / time;
-
-	fprintf(stdout, "%lld fps (%lld ms)\n", fps, time / 1000);
-
-	time = stats->end.tv_sec * 1000000 + stats->end.tv_usec;
-	time -= stats->start.tv_sec * 1000000 + stats->start.tv_usec;
-
-	fprintf(stdout, "total time %lld ms (%lld)\n", time / 1000,
-		last * 1000000 / time);
-}
-
 static void *main_thread_func(void *args)
 {
 	struct instance *i = args;
@@ -451,7 +345,7 @@ static void *main_thread_func(void *args)
 
 			dbg("dequeuing capture buffer");
 
-			trace_buf_start(i, TYPE_DQBUF);
+			tracer_buf_start(i, TYPE_DQBUF);
 
 			if (i->use_dmabuf)
 				ret = video_dequeue_capture_dmabuf(
@@ -460,7 +354,7 @@ static void *main_thread_func(void *args)
 				ret = video_dequeue_capture(i, &n, &finished,
 							    &bytesused);
 
-			trace_buf_finish(i, TYPE_DQBUF);
+			tracer_buf_finish(i, TYPE_DQBUF);
 
 			if (ret < 0)
 				goto next_event;
@@ -490,18 +384,17 @@ static void *main_thread_func(void *args)
 
 			print_time_delta("disp");
 
-			save_frame(i, (void *)vid->cap_buf_addr[n][0],
-				   bytesused);
+			save_frame(i, vid->cap_buf_addr[n][0], bytesused);
 
-			trace_buf_start(i, TYPE_QBUF);
+			tracer_buf_start(i, TYPE_QBUF);
 
 			if (i->use_dmabuf)
-				ret = video_queue_buf_cap_dmabuf(
-							i, n, &i->disp_buf[n]);
+				ret = video_queue_buf_cap_dmabuf(i, n,
+							&i->disp_buf[n]);
 			else
 				ret = video_queue_buf_cap(i, n);
 
-			trace_buf_finish(i, TYPE_QBUF);
+			tracer_buf_finish(i, TYPE_QBUF);
 
 			if (!ret)
 				vid->cap_buf_flag[n] = 1;
@@ -556,7 +449,7 @@ int main(int argc, char **argv)
 
 	vid->total_captured = 0;
 
-	ret = trace_init(&inst);
+	ret = tracer_init(&inst);
 	if (ret)
 		goto err;
 
@@ -583,7 +476,7 @@ int main(int argc, char **argv)
 		goto err;
 
 	ret = video_setup_output(&inst, inst.parser.codec,
-				 STREAM_BUUFER_SIZE, 4);
+				 STREAM_BUFFER_SIZE, 4);
 	if (ret)
 		goto err;
 
@@ -622,7 +515,7 @@ int main(int argc, char **argv)
 #if 0
 	unsigned int index;
 
-	video_create_bufs(&inst, &index, 1);
+	video_create_bufs(&inst, inst->width, inst->height, &index, 1);
 #endif
 
 	ret = video_stream(&inst, V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,
@@ -630,7 +523,6 @@ int main(int argc, char **argv)
 	if (ret)
 		goto err;
 
-#if 1
 	/* queue all capture buffers */
 	for (n = 0; n < vid->cap_buf_cnt; n++) {
 		if (inst.use_dmabuf)
@@ -644,7 +536,7 @@ int main(int argc, char **argv)
 
 		vid->cap_buf_flag[n] = 1;
 	}
-#endif
+
 	ret = extract_and_process_header(&inst);
 	if (ret)
 		goto err;
@@ -686,9 +578,9 @@ error:
 
 	cleanup(&inst);
 
-	trace_show(&inst);
+	tracer_show(&inst);
 
-	trace_deinit(&inst);
+	tracer_deinit(&inst);
 
 	pthread_mutex_destroy(&inst.lock);
 	pthread_cond_destroy(&inst.cond);
@@ -699,4 +591,3 @@ err:
 	cleanup(&inst);
 	return 1;
 }
-

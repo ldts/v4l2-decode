@@ -1,3 +1,5 @@
-
 *.o
-v4l2_decode
+.*.d
+/compile_commands.json
+/v4l2_decode
+/protocol

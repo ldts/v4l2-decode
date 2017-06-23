@@ -1,7 +1,0 @@
-#Example command line
-
- -D option enables usage of drm/kms for displaying
-./v4l2_decode -w 1280 -h 720 -c h264 -i FVDO_Freeway_720p.264 -m /dev/video32 -D
-
- -f used for saving decoded (NV12 format) frames on disk
-./v4l2_decode -w 1280 -h 720 -c h264 -i FVDO_Freeway_720p.264 -m /dev/video32 -f

@@ -349,9 +349,9 @@ send_pkt(struct instance *i, int buf_index, AVPacket *pkt)
 		AVRational v4l_timebase = { 1, 1000000 };
 		int64_t v4l_pts;
 
-//		if (i->bsf)
-//			vid_timebase = i->bsf->time_base_out;
-//		else
+		if (i->bsf)
+			vid_timebase = i->bsf->time_base_out;
+		else
 			vid_timebase = i->stream->time_base;
 
 		v4l_pts = av_rescale_q(pkt->pts, vid_timebase, v4l_timebase);
@@ -920,8 +920,8 @@ static void
 stream_close(struct instance *i)
 {
 	i->stream = NULL;
-//	if (i->bsf)
-//		av_bsf_free(&i->bsf);
+	if (i->bsf)
+		av_bsf_free(&i->bsf);
 	if (i->avctx)
 		avformat_close_input(&i->avctx);
 }

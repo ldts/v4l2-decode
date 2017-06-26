@@ -35,6 +35,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "../config.h"
 #include "args.h"
 #include "common.h"
 #include "video.h"

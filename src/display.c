@@ -9,10 +9,10 @@
 #include <wayland-client.h>
 
 #include "common.h"
-#include "viewporter-client-protocol.h"
-#include "presentation-time-client-protocol.h"
-#include "xdg-shell-unstable-v6-client-protocol.h"
-#include "linux-dmabuf-unstable-v1-client-protocol.h"
+#include "viewporter-client.h"
+#include "presentation-time-client.h"
+#include "xdg-shell-unstable-v6-client.h"
+#include "linux-dmabuf-unstable-v1-client.h"
 
 #define DBG_TAG "  disp"
 

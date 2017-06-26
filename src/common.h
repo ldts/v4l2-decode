@@ -32,7 +32,6 @@
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 
-#include "display.h"
 #include "drm-funcs.h"
 #include "queue.h"
 

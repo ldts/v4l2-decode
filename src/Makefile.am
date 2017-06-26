@@ -23,6 +23,10 @@ v4l2decode_SOURCES = args.c args.h common.h \
 		     main.c
 
 if ENABLE_WAYLAND
-v4l2decode_LDADD += $(WAYLANDCLIENT)
+v4l2decode_LDADD += $(WAYLAND_LIBS)
+v4l2decode_SOURCES += linux-dmabuf-unstable-v1-client.c \
+		      presentation-time-client.c \
+		      viewporter-client.c \
+		      xdg-shell-unstable-v6-client.c
 v4l2decode_SOURCES += display.c display.h
 endif

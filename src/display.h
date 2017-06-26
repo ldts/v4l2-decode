@@ -13,7 +13,7 @@ struct fb;
 typedef void (*fb_release_cb_t)(struct fb *fb, void *data);
 
 typedef void (*window_key_cb_t)(struct window *w, uint32_t time, uint32_t key,
-				enum wl_keyboard_key_state state);
+				uint32_t state);
 
 typedef void (*repaint_surface_func_t)(struct fb *fb);
 typedef void * (*repaint_surface_func2_t)(struct fb *fb);

@@ -257,7 +257,7 @@ save_frame(struct instance *i, const void *buf, unsigned int size)
 
 	ret = write(fd, buf, size);
 	if (ret < 0) {
-		err("cannot write to file (%s)", strerror(errno));
+		err("cannot write to file (%s, %s) address = %p", filename, strerror(errno), buf);
 		return -1;
 	}
 

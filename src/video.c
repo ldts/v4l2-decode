@@ -653,18 +653,16 @@ int video_setup_capture(struct instance *i, int num_buffers, int w, int h)
 		}
 
 		vid->cap_buf_off[n][0] = buf.m.planes[0].m.mem_offset;
-#if 0
 		vid->cap_buf_addr[n][0] = mmap(NULL, buf.m.planes[0].length,
 					       PROT_READ | PROT_WRITE,
 					       MAP_SHARED,
 					       vid->fd,
-					       buf.m.planes[0].m.mem_offset);
+					       buf.m.planes[0].m.userptr);
 
 		if (vid->cap_buf_addr[n][0] == MAP_FAILED) {
 			err("CAPTURE: Failed to MMAP buffer");
 			return -1;
 		}
-#endif
 		vid->cap_buf_size[0] = buf.m.planes[0].length;
 	}
 

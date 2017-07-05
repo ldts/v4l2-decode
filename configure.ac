@@ -26,8 +26,12 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 # Initialize libtool
 AC_PROG_LIBTOOL
 
-# We can add more checks in this section
+AC_CHECK_PROG(PKGCONFIG_CHECK,pkg-config,yes)
+if test x"$PKGCONFIG_CHECK" != x"yes" ; then
+    AC_MSG_ERROR([Please install pkg-config before continuing])
+fi
 
+# We can add more checks in this section
 PKG_CHECK_MODULES([AVCODEC], [libavcodec >= 3.0.7])
 PKG_CHECK_MODULES([AVFORMAT], [libavformat >= 3.0.7])
 PKG_CHECK_MODULES([AVUTIL], [libavutil >= 3.0.7])
